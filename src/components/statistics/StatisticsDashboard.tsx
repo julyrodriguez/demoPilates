@@ -252,21 +252,59 @@ export function StatisticsDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-12 max-w-7xl mx-auto">
-      {/* Header con Período y Pestañas */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5 sm:space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span>Estadísticas y Métricas</span>
-            </h2>
-            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Resumen simple y en tiempo real de tu estudio
-            </p>
+      {/* Selector de Período y Pestañas */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          {/* Pestañas de Navegación */}
+          <div className="-mx-2 px-2 sm:mx-0 sm:px-0 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab("overview")}
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "overview"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              📊 Resumen General
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("finance")}
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "finance"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              💰 Ingresos & Facturación
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("plans")}
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "plans"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              👥 Alumnos & Planes
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("disciplines")}
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "disciplines"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              🧘‍♀️ Disciplinas
+            </button>
           </div>
 
-          {/* Filtros de Mes y Año (Optimizados en Grid para Mobile) */}
-          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+          {/* Filtros de Mes y Año */}
+          <div className="grid grid-cols-2 gap-2 w-full lg:w-auto shrink-0">
             <select
               value={selectedMonth}
               onChange={(e) =>
@@ -294,54 +332,6 @@ export function StatisticsDashboard() {
               ))}
             </select>
           </div>
-        </div>
-
-        {/* Pestañas de Navegación (Horizontal Scroll fluido en Mobile) */}
-        <div className="-mx-4 px-4 sm:mx-0 sm:px-0 flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-slate-100 dark:border-slate-800 pb-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("overview")}
-            className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-              activeTab === "overview"
-                ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            📊 Resumen General
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("finance")}
-            className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-              activeTab === "finance"
-                ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            💰 Ingresos & Facturación
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("plans")}
-            className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-              activeTab === "plans"
-                ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            👥 Alumnos & Planes
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("disciplines")}
-            className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-              activeTab === "disciplines"
-                ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            🧘‍♀️ Disciplinas
-          </button>
         </div>
       </div>
 

@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
-import { Header } from "@/components/layout/Header";
 import { EmailSimulatorModal } from "@/components/modals/EmailSimulatorModal";
 import { useData } from "@/context/DataContext";
 import { Mail, ExternalLink, Key, Eye, Search, X, Phone, User, Filter, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
@@ -95,24 +94,7 @@ export default function SimuladorEmailsPage() {
 
   return (
     <AppShell>
-      <Header />
-
-      {/* Banner Informativo */}
-      <div className="glass-card p-4 sm:p-6 mb-6">
-        <div className="flex items-start gap-3.5 sm:gap-4">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-900 dark:bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-            <Mail className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100">
-              Centro de Notificaciones por Correo & Cancelación con Enlace Único
-            </h2>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-              Consulta y previsualiza los correos emitidos automáticamente a los alumnos al reservar o cancelar. Puedes buscar por nombre, correo electrónico, teléfono o código.
-            </p>
-          </div>
-        </div>
-      </div>
+      <div className="pt-1 sm:pt-2">
 
       {/* Barra de Búsqueda y Filtros */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs mb-6 space-y-3">
@@ -380,6 +362,7 @@ export default function SimuladorEmailsPage() {
         onClose={() => setModalOpen(false)}
         selectedEmailCode={selectedEmailCode}
       />
+      </div>
     </AppShell>
   );
 }
