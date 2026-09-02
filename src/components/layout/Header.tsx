@@ -19,6 +19,10 @@ interface HeaderProps {
 }
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
+  "/info": {
+    title: "Página Informativa",
+    subtitle: "Guía completa del sistema, panel administrativo y portal público de reservas",
+  },
   "/": {
     title: "Calendario Semanal",
     subtitle: "Agenda interactiva de clases, horarios y aforos en tiempo real",

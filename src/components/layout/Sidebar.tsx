@@ -18,11 +18,18 @@ import {
   LogOut,
   BarChart3,
   Award,
+  BookOpen,
 } from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
+  {
+    href: "/info",
+    label: "Página Informativa",
+    icon: BookOpen,
+    badge: "Guía",
+  },
   {
     href: "/",
     label: "Calendario Semanal",
