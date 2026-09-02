@@ -40,44 +40,6 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
   // Función para normalizar números de teléfono para comparación flexible
   const cleanPhone = (val: string) => (val || "").replace(/\D/g, "");
 
-  // Estado de clienta detectada únicamente activado al salir del campo (onBlur)
-  const [matchedClient, setMatchedClient] = useState<any | null>(null);
-
-  // Detectar si el usuario ya tiene una reserva confirmada en un turno específico (solo con contacto completo o clienta confirmada)
-  const isClientAlreadyBookedInShift = useCallback(
-    (shiftIdToCheck: string) => {
-      const emailNorm = clientEmail.trim().toLowerCase();
-      const phoneDigits = cleanPhone(clientPhone);
-
-      const hasValidEmail = emailNorm.includes("@") && emailNorm.length >= 5;
-      const hasValidPhone = phoneDigits.length >= 8;
-
-      if (!hasValidEmail && !hasValidPhone && !matchedClient) return false;
-
-      return bookings.some((b) => {
-        if (b.shiftId !== shiftIdToCheck || b.status === "cancelled") return false;
-
-        const matchEmail = Boolean(hasValidEmail && b.clientEmail && b.clientEmail.toLowerCase() === emailNorm);
-        const bPhoneDigits = cleanPhone(b.clientPhone || "");
-        const matchPhone = Boolean(
-          hasValidPhone &&
-          bPhoneDigits.length >= 8 &&
-          (bPhoneDigits.endsWith(phoneDigits) ||
-           phoneDigits.endsWith(bPhoneDigits) ||
-           bPhoneDigits === phoneDigits)
-        );
-        const matchMatchedClient = Boolean(
-          matchedClient &&
-          ((matchedClient.email && b.clientEmail && b.clientEmail.toLowerCase() === matchedClient.email.toLowerCase()) ||
-           (matchedClient.phone && b.clientPhone && cleanPhone(b.clientPhone) === cleanPhone(matchedClient.phone)))
-        );
-
-        return matchEmail || matchPhone || matchMatchedClient;
-      });
-    },
-    [clientEmail, clientPhone, bookings, matchedClient]
-  );
-
   // Comparador exacto de números de teléfono (ignora formato de guiones/espacios pero exige número completo exacto)
   const isExactPhoneMatch = (inputPhone: string, dbPhone: string): boolean => {
     const p1 = cleanPhone(inputPhone);
@@ -88,12 +50,47 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
     // Coincidencia exacta de dígitos
     if (p1 === p2) return true;
 
-    // Comparar formato nacional argentino (removiendo prefijos internacionales 54 / 549 o prefijo 0)
+    // Comparar formato nacional argentino (removiendo prefijos internacionales 54 / 549 o prefijo 0 o 15)
     const nat1 = p1.replace(/^549?/, "").replace(/^0/, "").replace(/^15/, "");
     const nat2 = p2.replace(/^549?/, "").replace(/^0/, "").replace(/^15/, "");
 
     return nat1 === nat2 && nat1.length >= 8;
   };
+
+  // Estado de clienta detectada únicamente activado al salir del campo (onBlur)
+  const [matchedClient, setMatchedClient] = useState<any | null>(null);
+
+  // Detectar si el usuario ya tiene una reserva confirmada en un turno específico (solo con contacto completo o clienta confirmada)
+  const isClientAlreadyBookedInShift = useCallback(
+    (shiftIdToCheck: string) => {
+      const emailNorm = clientEmail.trim().toLowerCase();
+      const phoneDigits = cleanPhone(clientPhone);
+
+      const hasValidEmail = emailNorm.includes("@") && emailNorm.includes(".") && emailNorm.length >= 6;
+      const hasValidPhone = phoneDigits.length >= 8;
+
+      if (!hasValidEmail && !hasValidPhone && !matchedClient) return false;
+
+      return bookings.some((b) => {
+        if (b.shiftId !== shiftIdToCheck || b.status === "cancelled") return false;
+
+        const matchEmail = Boolean(hasValidEmail && b.clientEmail && b.clientEmail.trim().toLowerCase() === emailNorm);
+        const matchPhone = Boolean(
+          hasValidPhone &&
+          b.clientPhone &&
+          isExactPhoneMatch(phoneDigits, b.clientPhone)
+        );
+        const matchMatchedClient = Boolean(
+          matchedClient &&
+          ((matchedClient.email && b.clientEmail && b.clientEmail.trim().toLowerCase() === matchedClient.email.trim().toLowerCase()) ||
+           (matchedClient.phone && b.clientPhone && isExactPhoneMatch(b.clientPhone, matchedClient.phone)))
+        );
+
+        return matchEmail || matchPhone || matchMatchedClient;
+      });
+    },
+    [clientEmail, clientPhone, bookings, matchedClient]
+  );
 
   // Al escribir en el teléfono: SOLO actualiza el estado (sin autocompletar mientras escribe)
   const handlePhoneChange = (val: string) => {
