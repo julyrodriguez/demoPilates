@@ -67,7 +67,7 @@ export function EmailSimulatorModal({
               {/* Email client header */}
               <div className="p-2.5 sm:p-3 rounded-xl bg-slate-100 dark:bg-slate-950 text-[11px] sm:text-xs space-y-1 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 break-words">
                 <div>
-                  <strong>De:</strong> {settings.studioName || "Demo Pilates"} &lt;turnos@demopilates.jariel.com.ar&gt;
+                  <strong>De:</strong> {settings.studioName || "Demo Pilates"} &lt;turnos@jariel.com.ar&gt;
                 </div>
                 <div>
                   <strong>Para:</strong> {selectedEmail.recipientName} &lt;{selectedEmail.recipientEmail}&gt;

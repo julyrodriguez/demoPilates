@@ -195,12 +195,12 @@ export async function POST(req: Request) {
     if (resendApiKey) {
       try {
         const resend = new Resend(resendApiKey);
-        const fromEmail = process.env.RESEND_FROM_EMAIL || `${studioName} <turnos@demopilates.jariel.com.ar>`;
+        const fromEmail = process.env.RESEND_FROM_EMAIL || `${studioName} <turnos@jariel.com.ar>`;
 
         const { data, error } = await resend.emails.send({
           from: fromEmail,
           to: recipientEmail,
-          replyTo: process.env.RESEND_REPLY_TO || "turnos@demopilates.jariel.com.ar",
+          replyTo: process.env.RESEND_REPLY_TO || "turnos@jariel.com.ar",
           subject,
           html,
           text,
