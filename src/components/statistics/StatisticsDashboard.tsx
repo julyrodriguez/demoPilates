@@ -253,64 +253,68 @@ export function StatisticsDashboard() {
   return (
     <div className="space-y-4 sm:space-y-6 pb-12 max-w-7xl mx-auto">
       {/* Selector de Período y Pestañas */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-          {/* Pestañas de Navegación */}
-          <div className="-mx-2 px-2 sm:mx-0 sm:px-0 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-2.5 sm:space-y-3">
+        {/* VISTA MOBILE: Segmented Control 2x2 nativo */}
+        <div className="block sm:hidden space-y-2.5">
+          <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-950/80 rounded-2xl border border-slate-200/80 dark:border-slate-800">
             <button
               type="button"
               onClick={() => setActiveTab("overview")}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs transition-all cursor-pointer ${
                 activeTab === "overview"
-                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
+                  : "text-slate-600 dark:text-slate-400 font-semibold hover:text-slate-900"
               }`}
             >
-              📊 Resumen General
+              <span>📊</span>
+              <span>Resumen</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("finance")}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs transition-all cursor-pointer ${
                 activeTab === "finance"
-                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
+                  : "text-slate-600 dark:text-slate-400 font-semibold hover:text-slate-900"
               }`}
             >
-              💰 Ingresos & Facturación
+              <span>💰</span>
+              <span>Facturación</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("plans")}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs transition-all cursor-pointer ${
                 activeTab === "plans"
-                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
+                  : "text-slate-600 dark:text-slate-400 font-semibold hover:text-slate-900"
               }`}
             >
-              👥 Alumnos & Planes
+              <span>👥</span>
+              <span>Alumnos</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("disciplines")}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs transition-all cursor-pointer ${
                 activeTab === "disciplines"
-                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
+                  : "text-slate-600 dark:text-slate-400 font-semibold hover:text-slate-900"
               }`}
             >
-              🧘‍♀️ Disciplinas
+              <span>🧘‍♀️</span>
+              <span>Disciplinas</span>
             </button>
           </div>
 
-          {/* Filtros de Mes y Año */}
-          <div className="grid grid-cols-2 gap-2 w-full lg:w-auto shrink-0">
+          {/* Selectores Mobile */}
+          <div className="grid grid-cols-2 gap-2">
             <select
               value={selectedMonth}
               onChange={(e) =>
                 setSelectedMonth(e.target.value === "all" ? "all" : parseInt(e.target.value, 10))
               }
-              className="w-full px-2.5 sm:px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs truncate"
+              className="w-full px-2.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs truncate"
             >
               <option value="all">🗓️ Todo el Año</option>
               {MONTH_NAMES.map((m, idx) => (
@@ -323,7 +327,88 @@ export function StatisticsDashboard() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-              className="w-full px-2.5 sm:px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs"
+              className="w-full px-2.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs"
+            >
+              {availableYears.map((yr) => (
+                <option key={yr} value={yr}>
+                  {yr}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* VISTA DESKTOP / TABLET */}
+        <div className="hidden sm:flex sm:items-center justify-between gap-2.5">
+          {/* Pestañas de Navegación */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab("overview")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "overview"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              📊 Resumen General
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("finance")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "finance"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              💰 Ingresos & Facturación
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("plans")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "plans"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              👥 Alumnos & Planes
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("disciplines")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                activeTab === "disciplines"
+                  ? "bg-slate-900 text-white dark:bg-indigo-600 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              🧘‍♀️ Disciplinas
+            </button>
+          </div>
+
+          {/* Filtros de Mes y Año */}
+          <div className="grid grid-cols-2 gap-2 shrink-0">
+            <select
+              value={selectedMonth}
+              onChange={(e) =>
+                setSelectedMonth(e.target.value === "all" ? "all" : parseInt(e.target.value, 10))
+              }
+              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs truncate"
+            >
+              <option value="all">🗓️ Todo el Año</option>
+              {MONTH_NAMES.map((m, idx) => (
+                <option key={idx} value={idx}>
+                  {m}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs"
             >
               {availableYears.map((yr) => (
                 <option key={yr} value={yr}>
