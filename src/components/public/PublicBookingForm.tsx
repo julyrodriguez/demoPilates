@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
-import { Shift } from "@/types";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { Shift, Plan } from "@/types";
 import { useData } from "@/context/DataContext";
+import { getFirebaseDb } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import {
   User,
   Mail,
@@ -18,6 +20,7 @@ import {
   AlertCircle,
   Lock,
   MapPin,
+  Check,
 } from "lucide-react";
 
 interface PublicBookingFormProps {
@@ -27,7 +30,7 @@ interface PublicBookingFormProps {
 }
 
 export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingFormProps) {
-  const { createBooking, clients, shifts, bookings, getClientWeeklyUsage } = useData();
+  const { createBooking, clients, shifts, bookings, plans: contextPlans, getClientWeeklyUsage } = useData();
 
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -36,6 +39,10 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
   const [additionalShiftIds, setAdditionalShiftIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Planes disponibles cargados desde Firestore o contexto
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 
   // Función para normalizar números de teléfono para comparación flexible
   const cleanPhone = (val: string) => (val || "").replace(/\D/g, "");
@@ -92,62 +99,247 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
     [clientEmail, clientPhone, bookings, matchedClient]
   );
 
-  // Al escribir en el teléfono: SOLO actualiza el estado (sin autocompletar mientras escribe)
+  // Función para calcular rango de semana (Lunes a Domingo)
+  const getWeekRange = (dateStr: string) => {
+    let [y, m, d] = (dateStr || "").split("-").map(Number);
+    const baseDate = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+    const day = baseDate.getDay();
+    const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(baseDate);
+    monday.setDate(diff);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const formatYMD = (date: Date) => {
+      const yy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      return `${yy}-${mm}-${dd}`;
+    };
+    return { mondayStr: formatYMD(monday), sundayStr: formatYMD(sunday) };
+  };
+
+  const [weeklyUsage, setWeeklyUsage] = useState<{
+    used: number;
+    total: number;
+    remaining: number;
+    planName: string;
+    hasPlan: boolean;
+  }>({ used: 0, total: 0, remaining: 0, planName: "", hasPlan: false });
+  const [isCheckingPlan, setIsCheckingPlan] = useState(false);
+
+  // Detectar clienta y calcular uso semanal de su plan directamente en Firestore
+  const detectClientAndUsage = useCallback(
+    async (emailInput?: string, phoneInput?: string) => {
+      const emailNorm = (emailInput !== undefined ? emailInput : clientEmail).trim().toLowerCase();
+      const digits = cleanPhone(phoneInput !== undefined ? phoneInput : clientPhone);
+      const db = getFirebaseDb();
+
+      let found: any = null;
+
+      // 1. Buscar por email (priorizando registro con plan)
+      if (emailNorm.includes("@") && emailNorm.includes(".") && emailNorm.length >= 6) {
+        found = clients.find((c) => c.email && c.email.trim().toLowerCase() === emailNorm && (c.planId || c.planName));
+        if (!found) {
+          found = clients.find((c) => c.email && c.email.trim().toLowerCase() === emailNorm);
+        }
+        if (!found && db) {
+          try {
+            const qSnap = await getDocs(
+              query(collection(db, "pilates_clients"), where("email", "==", emailNorm))
+            );
+            if (!qSnap.empty) {
+              const matches = qSnap.docs.map((d) => d.data());
+              found = matches.find((m: any) => m.planId || m.planName || m.planClassesPerWeek) || matches[0];
+            }
+          } catch (err) {
+            console.warn("Error querying client by email:", err);
+          }
+        }
+      }
+
+      // 2. Buscar por teléfono si no se halló por email
+      if (!found && digits.length >= 8) {
+        found = clients.find((c) => isExactPhoneMatch(digits, c.phone || "") && (c.planId || c.planName));
+        if (!found) {
+          found = clients.find((c) => isExactPhoneMatch(digits, c.phone || ""));
+        }
+        if (!found && db) {
+          try {
+            const qSnap = await getDocs(
+              query(collection(db, "pilates_clients"), where("phone", "==", digits))
+            );
+            if (!qSnap.empty) {
+              const matches = qSnap.docs.map((d) => d.data());
+              found = matches.find((m: any) => m.planId || m.planName || m.planClassesPerWeek) || matches[0];
+            }
+          } catch (err) {
+            console.warn("Error querying client by phone:", err);
+          }
+        }
+      }
+
+      if (found) {
+        setMatchedClient(found);
+        if (!clientName.trim() && found.name) setClientName(found.name);
+        if (!clientPhone.trim() && found.phone) setClientPhone(found.phone);
+        if (!clientEmail.trim() && found.email) setClientEmail(found.email);
+
+        // 3. Verificar si la clienta posee un plan activo
+        let totalAllowed = found.planClassesPerWeek || 0;
+        let planName = found.planName || "";
+
+        if ((!totalAllowed || !planName) && found.planId && db) {
+          try {
+            const pSnap = await getDocs(
+              query(collection(db, "pilates_plans"), where("id", "==", found.planId))
+            );
+            if (!pSnap.empty) {
+              const pData = pSnap.docs[0].data();
+              if (!totalAllowed) totalAllowed = pData.classesPerWeek || 0;
+              if (!planName) planName = pData.name || "";
+            }
+          } catch (e) {
+            console.warn("Error fetching plan doc in public form:", e);
+          }
+        }
+
+        const hasPlan = Boolean(totalAllowed > 0 || planName || found.planId);
+
+        if (hasPlan) {
+          setIsCheckingPlan(true);
+          const { mondayStr, sundayStr } = getWeekRange(shift.date);
+          let usedCount = found.weeklyUsageMap?.[mondayStr];
+
+          if (usedCount === undefined && db) {
+            try {
+              const searchEmail = (found.email || emailNorm).trim().toLowerCase();
+              const bSnap = await getDocs(
+                query(
+                  collection(db, "pilates_bookings"),
+                  where("clientEmail", "==", searchEmail),
+                  where("status", "==", "confirmed")
+                )
+              );
+              const weekBookings = bSnap.docs
+                .map((d) => d.data())
+                .filter((b: any) => b.shiftDate >= mondayStr && b.shiftDate <= sundayStr);
+              usedCount = weekBookings.length;
+            } catch (err) {
+              console.warn("Error querying client week bookings:", err);
+              usedCount = 0;
+            }
+          }
+
+          const finalUsed = usedCount || 0;
+          const finalTotal = totalAllowed > 0 ? totalAllowed : 2;
+          setWeeklyUsage({
+            hasPlan: true,
+            planName: planName || "Plan de Clases",
+            total: finalTotal,
+            used: finalUsed,
+            remaining: Math.max(0, finalTotal - finalUsed),
+          });
+          setIsCheckingPlan(false);
+        } else {
+          setWeeklyUsage({ used: 0, total: 0, remaining: 0, planName: "", hasPlan: false });
+        }
+      } else {
+        setMatchedClient(null);
+        setWeeklyUsage({ used: 0, total: 0, remaining: 0, planName: "", hasPlan: false });
+      }
+    },
+    [clients, clientName, clientPhone, clientEmail, shift.date]
+  );
+
+  // Al escribir en el teléfono
   const handlePhoneChange = (val: string) => {
     const digits = (val || "").replace(/\D/g, "");
     setClientPhone(digits);
     if (!digits && !clientEmail.trim()) {
       setMatchedClient(null);
+      setWeeklyUsage({ used: 0, total: 0, remaining: 0, planName: "", hasPlan: false });
     }
   };
 
-  // Autocompletar SOLO cuando termina de escribir y sale del campo (onBlur) con número exacto
   const handlePhoneBlur = () => {
-    const digits = cleanPhone(clientPhone);
-    if (digits.length >= 8) {
-      const found = clients.find((c) => isExactPhoneMatch(digits, c.phone || ""));
-      if (found) {
-        setMatchedClient(found);
-        if (!clientName.trim() && found.name) setClientName(found.name);
-        if (!clientEmail.trim() && found.email) setClientEmail(found.email);
-        return;
-      }
-    }
-    if (!clientEmail.trim()) setMatchedClient(null);
+    detectClientAndUsage(undefined, clientPhone);
   };
 
-  // Al escribir en el correo: SOLO actualiza el estado (sin autocompletar mientras escribe)
+  // Al escribir en el correo
   const handleEmailChange = (val: string) => {
     setClientEmail(val);
     if (!val.trim() && !clientPhone.trim()) {
       setMatchedClient(null);
+      setWeeklyUsage({ used: 0, total: 0, remaining: 0, planName: "", hasPlan: false });
     }
   };
 
-  // Autocompletar SOLO cuando termina de escribir y sale del campo (onBlur) con correo completo y exacto
   const handleEmailBlur = () => {
-    const emailNorm = clientEmail.trim().toLowerCase();
-    if (emailNorm.includes("@") && emailNorm.includes(".") && emailNorm.length >= 6) {
-      const found = clients.find((c) => c.email && c.email.trim().toLowerCase() === emailNorm);
-      if (found) {
-        setMatchedClient(found);
-        if (!clientName.trim() && found.name) setClientName(found.name);
-        if (!clientPhone.trim() && found.phone) setClientPhone(found.phone);
-        return;
-      }
-    }
-    if (!clientPhone.trim()) setMatchedClient(null);
+    detectClientAndUsage(clientEmail, undefined);
   };
 
-  // Obtener uso semanal de su plan para la semana de este turno (solo activo si hay matchedClient confirmado en blur)
-  const weeklyUsage = useMemo(() => {
-    if (!matchedClient) {
-      return { used: 0, total: 0, remaining: 0, planName: "", hasPlan: false };
-    }
-    return getClientWeeklyUsage(matchedClient.id, shift.date);
-  }, [matchedClient, getClientWeeklyUsage, shift.date]);
+  // Detección automática al terminar de tipear con debounce
+  useEffect(() => {
+    const emailNorm = clientEmail.trim().toLowerCase();
+    const digits = cleanPhone(clientPhone);
 
-  // Otras clases disponibles de la misma semana para sumar al plan
+    if ((emailNorm.includes("@") && emailNorm.includes(".") && emailNorm.length >= 6) || digits.length >= 8) {
+      const timer = setTimeout(() => {
+        detectClientAndUsage(clientEmail, clientPhone);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [clientEmail, clientPhone, detectClientAndUsage]);
+
+  // Cargar planes activos del estudio desde Firestore o del contexto (ordenados de menor a mayor precio)
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (db) {
+      getDocs(query(collection(db, "pilates_plans")))
+        .then((snap) => {
+          const list = snap.docs
+            .map((d) => d.data() as Plan)
+            .filter((p) => p && p.id && !p.id.startsWith("_") && p.active !== false);
+          if (list.length > 0) {
+            setAvailablePlans(list.sort((a, b) => (a.price || 0) - (b.price || 0)));
+          } else if (contextPlans && contextPlans.length > 0) {
+            setAvailablePlans(contextPlans.filter((p) => p.active !== false).sort((a, b) => (a.price || 0) - (b.price || 0)));
+          }
+        })
+        .catch(() => {
+          if (contextPlans && contextPlans.length > 0) {
+            setAvailablePlans(contextPlans.filter((p) => p.active !== false).sort((a, b) => (a.price || 0) - (b.price || 0)));
+          }
+        });
+    } else if (contextPlans && contextPlans.length > 0) {
+      setAvailablePlans(contextPlans.filter((p) => p.active !== false).sort((a, b) => (a.price || 0) - (b.price || 0)));
+    }
+  }, [contextPlans]);
+
+  // Selección o cambio de plan por parte de un usuario sin plan asignado
+  const handleSelectPlan = (plan: Plan | null) => {
+    setSelectedPlan(plan);
+    if (plan) {
+      const classesAllowed = plan.classesPerWeek || 2;
+      setWeeklyUsage({
+        hasPlan: true,
+        planName: plan.name,
+        total: classesAllowed,
+        used: 0,
+        remaining: classesAllowed,
+      });
+    } else {
+      setWeeklyUsage({
+        hasPlan: false,
+        planName: "",
+        total: 0,
+        used: 0,
+        remaining: 0,
+      });
+      setAdditionalShiftIds([]);
+    }
+  };
   const otherAvailableWeekShifts = useMemo(() => {
     const baseDate = new Date(shift.date + "T12:00:00");
     const monday = new Date(baseDate);
@@ -257,8 +449,10 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
   const isMainShiftStarted = hasShiftStarted(shift.date, shift.startTime);
   const hasNameInfo = clientName.trim().length > 0;
   const isFormValid = hasNameInfo && hasContactInfo;
+  const requiresPlanSelection = !matchedClient?.planId && !matchedClient?.planName && !matchedClient?.planClassesPerWeek && availablePlans.length > 0;
+  const isPlanSelected = !requiresPlanSelection || Boolean(selectedPlan);
   const isPlanQuotaExceeded = weeklyUsage.hasPlan && weeklyUsage.remaining === 0;
-  const isSubmitDisabled = submitting || !isFormValid || isPlanQuotaExceeded || isMainShiftAlreadyBooked || isMainShiftStarted;
+  const isSubmitDisabled = submitting || !isFormValid || !isPlanSelected || isPlanQuotaExceeded || isMainShiftAlreadyBooked || isMainShiftStarted;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -279,6 +473,11 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
       return;
     }
 
+    if (requiresPlanSelection && !selectedPlan) {
+      setError("Por favor selecciona un plan de clases para continuar.");
+      return;
+    }
+
     if (isMainShiftAlreadyBooked) {
       setError("Ya te encuentras inscripta/o en este turno.");
       return;
@@ -292,6 +491,14 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
     setSubmitting(true);
 
     try {
+      const planToAttach = selectedPlan
+        ? {
+            planId: selectedPlan.id,
+            planName: selectedPlan.name,
+            planClassesPerWeek: selectedPlan.classesPerWeek,
+          }
+        : {};
+
       // 1. Reservar clase principal
       const mainResult = await createBooking({
         shiftId: shift.id,
@@ -299,6 +506,7 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
         clientEmail: clientEmail.trim(),
         clientPhone: clientPhone.trim(),
         notes,
+        ...planToAttach,
       });
 
       // 2. Reservar clases adicionales si seleccionó más de una
@@ -309,6 +517,7 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
           clientEmail: clientEmail.trim(),
           clientPhone: clientPhone.trim(),
           notes: notes ? `${notes} (Reserva grupal semanal)` : "Reserva grupal semanal",
+          ...planToAttach,
         });
       }
 
@@ -361,8 +570,8 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
               ✨ Incluido en tu Plan
             </span>
           ) : (
-            <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
-              ${shift.price.toLocaleString("es-AR")}
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800">
+              Turno Disponible
             </span>
           )}
         </div>
@@ -374,7 +583,7 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
         </div>
         <div className="text-slate-600 dark:text-slate-300 text-[11px] flex items-center gap-1">
           <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-          <span>Av. Corrientes 1111, CABA • {shift.room} (Prof. {shift.instructorName})</span>
+          <span>Cesar Diaz 3031, CABA • {shift.room} (Prof. {shift.instructorName})</span>
         </div>
       </div>
 
@@ -433,8 +642,70 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
         </div>
       </div>
 
-      {/* Plan Status Banner (Si la clienta tiene Plan) */}
-      {weeklyUsage.hasPlan && (
+      {/* Selector de Planes y Costos para Clientas Nuevas o Sin Plan Asignado */}
+      {!matchedClient?.planId && !matchedClient?.planName && !matchedClient?.planClassesPerWeek && hasNameInfo && hasContactInfo && availablePlans.length > 0 && (
+        <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shadow-2xs">
+                <Award className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 dark:text-slate-100">
+                  Elige tu Plan de Clases
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Selecciona el plan semanal que deseas contratar con su arancel correspondiente:
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid de Planes Disponibles */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            {availablePlans.map((plan) => {
+              const isSelected = selectedPlan?.id === plan.id;
+              return (
+                <div
+                  key={plan.id}
+                  onClick={() => handleSelectPlan(plan)}
+                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                    isSelected
+                      ? "bg-white dark:bg-slate-950 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs"
+                      : "bg-white/60 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-black text-slate-900 dark:text-slate-100">
+                        {plan.name}
+                      </div>
+                      <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                        {plan.classesPerWeek} {plan.classesPerWeek === 1 ? "clase semanal" : "clases por semana"}
+                      </div>
+                    </div>
+                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                      isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300"
+                    }`}>
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 flex items-baseline justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800/60">
+                    <span className="text-[10px] text-slate-400 font-medium">Arancel:</span>
+                    <span className="text-xs font-black text-slate-900 dark:text-slate-100">
+                      ${plan.price.toLocaleString("es-AR")}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Plan Status Banner (Si la clienta ya tiene Plan asignado en base de datos) */}
+      {matchedClient && (matchedClient.planId || matchedClient.planName || matchedClient.planClassesPerWeek) && weeklyUsage.hasPlan && (
         weeklyUsage.remaining === 0 ? (
           <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-950 dark:text-rose-200 text-xs space-y-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
@@ -745,10 +1016,12 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
               ? "Cupo Semanal Completo (Sin turnos)"
               : !isFormValid
               ? "Completa tus datos para reservar"
+              : !isPlanSelected
+              ? "Elige un plan de clases"
               : weeklyUsage.hasPlan
               ? totalShiftsToBook > 1
-                ? `Confirmar ${totalShiftsToBook} Clases (Tu Plan)`
-                : "Confirmar Clase (Tu Plan)"
+                ? `Confirmar ${totalShiftsToBook} Clases (${weeklyUsage.planName})`
+                : `Confirmar Clase (${weeklyUsage.planName})`
               : totalShiftsToBook > 1
               ? `Confirmar ${totalShiftsToBook} Clases`
               : "Confirmar Reserva"}

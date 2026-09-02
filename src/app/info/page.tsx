@@ -24,9 +24,9 @@ export default function PaginaInformativa() {
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-16 pt-1 sm:pt-2">
         {/* ============================================================ */}
-        {/* HERO SECTION (Sin botones superiores para priorizar lectura) */}
+        {/* HERO BANNER PRINCIPAL: BIENVENIDA Y PROPUESTA DE VALOR */}
         {/* ============================================================ */}
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 text-white p-5 sm:p-8 md:p-10 border border-indigo-800/40 shadow-xl">
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-8 md:p-10 border border-indigo-900/60 shadow-xl">
           {/* Background Glows */}
           <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-1/3 -mb-10 w-80 h-80 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -269,7 +269,7 @@ export default function PaginaInformativa() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-1 sm:pt-2">
             <Link
-              href="/"
+              href="/calendario"
               className="p-3 sm:p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-center text-xs font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
             >
               <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />

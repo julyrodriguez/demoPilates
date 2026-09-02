@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Client, Booking, Plan } from "@/types";
 import { useData } from "@/context/DataContext";
+import { getFirebaseDb } from "@/lib/firebase";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { DisciplineBadge } from "@/components/common/DisciplineBadge";
 import {
   X,
@@ -23,6 +25,8 @@ import {
   ListOrdered,
   CreditCard,
   List,
+  Loader2,
+  Trash2,
 } from "lucide-react";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 
@@ -54,14 +58,63 @@ function formatWeekRange(mondayStr: string): string {
 }
 
 export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryModalProps) {
-  const { bookings, plans, updateClient, toggleClientWeeklyPayment } = useData();
+  const { bookings: fallbackBookings, plans, updateClient, deleteClient, toggleClientWeeklyPayment } = useData();
   const [activeTab, setActiveTab] = useState<"weeks" | "all" | "settings">("weeks");
   const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [weekPaymentToConfirm, setWeekPaymentToConfirm] = useState<{
     mondayStr: string;
     rangeLabel: string;
     isPaid: boolean;
   } | null>(null);
+
+  // Firestore on-demand state for this client
+  const [fetchedBookings, setFetchedBookings] = useState<Booking[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen || !client) {
+      setFetchedBookings([]);
+      return;
+    }
+
+    let isMounted = true;
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    setLoadingBookings(true);
+
+    let q;
+    if (client.email) {
+      q = query(collection(db, "pilates_bookings"), where("clientEmail", "==", client.email));
+    } else if (client.phone) {
+      q = query(collection(db, "pilates_bookings"), where("clientPhone", "==", client.phone));
+    } else {
+      q = query(collection(db, "pilates_bookings"), where("clientName", "==", client.name));
+    }
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        if (!isMounted) return;
+        const loaded = snap.docs
+          .map((d) => d.data() as Booking)
+          .filter((b) => b && b.id && !b.id.startsWith("_"));
+        setFetchedBookings(loaded);
+        setLoadingBookings(false);
+      },
+      (err) => {
+        console.warn("Error fetching client bookings on demand:", err);
+        if (isMounted) setLoadingBookings(false);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [isOpen, client]);
 
   // Form states for quick client settings
   const [hasCustomPrice, setHasCustomPrice] = useState(
@@ -83,16 +136,17 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
     }
   }, [client]);
 
-  // Todas las reservas del cliente calculadas incondicionalmente con useMemo
+  // Todas las reservas del cliente
   const clientBookings = useMemo(() => {
     if (!client) return [];
-    return bookings.filter((b) => {
+    const sourceBookings = fetchedBookings.length > 0 || loadingBookings ? fetchedBookings : fallbackBookings;
+    return sourceBookings.filter((b) => {
       const matchesEmail = Boolean(client.email && b.clientEmail && b.clientEmail.toLowerCase() === client.email.toLowerCase());
       const matchesPhone = Boolean(client.phone && b.clientPhone && b.clientPhone === client.phone);
-      const matchesName = Boolean(b.clientName.toLowerCase() === client.name.toLowerCase());
+      const matchesName = Boolean(b.clientName && b.clientName.toLowerCase() === client.name.toLowerCase());
       return matchesEmail || matchesPhone || matchesName;
     }).sort((a, b) => (b.shiftDate + b.shiftTime).localeCompare(a.shiftDate + a.shiftTime));
-  }, [bookings, client]);
+  }, [fetchedBookings, loadingBookings, fallbackBookings, client]);
 
   // Agrupación por semana (Lunes a Domingo) calculada incondicionalmente
   const bookingsByWeek = useMemo(() => {
@@ -600,15 +654,51 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
         </div>
 
         {/* Modal Footer */}
-        <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={deleting}
+            className="w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Borrar Alumno</span>
+          </button>
+
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+            disabled={deleting}
+            className="w-full sm:w-auto px-5 py-2 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
           >
             Cerrar Ficha
           </button>
         </div>
       </div>
+
+      {/* Confirmation Modal for Deleting Client */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="¿Eliminar Alumno?"
+        message={`¿Estás seguro de que deseas borrar a ${client.name}? Se eliminará su ficha y registro de alumnos.`}
+        confirmText="Sí, Borrar Alumno"
+        cancelText="Cancelar"
+        isDestructive={true}
+        isLoading={deleting}
+        onConfirm={async () => {
+          if (!client) return;
+          setDeleting(true);
+          try {
+            await deleteClient(client.id);
+            setShowDeleteConfirm(false);
+            onClose();
+          } catch (err) {
+            console.error("Error al borrar alumno:", err);
+          } finally {
+            setDeleting(false);
+          }
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
 
       {/* Confirmation Modal for Individual Week Payment toggle */}
       <ConfirmModal

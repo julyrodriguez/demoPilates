@@ -90,7 +90,7 @@ export function PublicBookingSuccessModal({
             </div>
             <div className="flex items-center gap-1.5 col-span-2">
               <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span>Av. Corrientes 1111, CABA • {booking.room} (Prof: {booking.instructorName})</span>
+              <span>Cesar Diaz 3031, CABA • {booking.room} (Prof: {booking.instructorName})</span>
             </div>
           </div>
         </div>

@@ -75,7 +75,7 @@ export function PublicBookingHeader({ onOpenMyBookings }: PublicBookingHeaderPro
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 pt-1 text-xs text-slate-300 w-full">
             <div className="flex items-center gap-1.5 font-semibold text-slate-200 bg-white/10 px-2.5 py-1 rounded-xl border border-white/10">
               <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span>{settings.address || "Av. Corrientes 1111, CABA"}</span>
+              <span>{settings.address || "Cesar Diaz 3031, CABA"}</span>
             </div>
             {settings.phone && (
               <div className="flex items-center gap-1.5">
