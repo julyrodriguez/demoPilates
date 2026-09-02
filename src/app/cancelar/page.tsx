@@ -1,0 +1,48 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { Sparkles, ArrowLeft } from "lucide-react";
+import { ThemeToggle } from "@/components/common/ThemeToggle";
+import { CancellationCard } from "@/components/cancel/CancellationCard";
+
+export default function CancelarGeneralPage() {
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 transition-colors duration-200">
+      <header className="max-w-4xl mx-auto w-full flex items-center justify-between pb-6 border-b border-slate-200 dark:border-slate-800">
+        <Link href="/reservar" className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-slate-900 dark:bg-indigo-600 flex items-center justify-center text-white shadow-xs">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              Demo Pilates
+            </h1>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+              Modificación y Cancelación de Turnos
+            </p>
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="/reservar"
+            className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Volver a Clases</span>
+          </Link>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="py-8 my-auto">
+        <CancellationCard initialCode="" />
+      </main>
+
+      <footer className="text-center text-xs text-slate-400 dark:text-slate-500 pt-6">
+        Demo Pilates • Gestión inteligente de turnos
+      </footer>
+    </div>
+  );
+}
