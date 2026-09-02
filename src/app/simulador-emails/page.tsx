@@ -94,10 +94,26 @@ export default function SimuladorEmailsPage() {
 
   return (
     <AppShell>
-      <div className="pt-1 sm:pt-2">
+      <div className="pt-1 sm:pt-2 space-y-4 sm:space-y-6">
+        {/* Header Card Propio */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs">
+          <div className="flex items-center gap-3.5 sm:gap-4">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs shrink-0">
+              <Mail className="w-5 h-5 sm:w-5 sm:h-5" />
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 leading-tight">
+                Correos y Notificaciones
+              </h1>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Auditoría en tiempo real y previsualización de emails automáticos emitidos a las alumnas
+              </p>
+            </div>
+          </div>
+        </div>
 
-      {/* Barra de Búsqueda y Filtros */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs mb-6 space-y-3">
+        {/* Barra de Búsqueda y Filtros */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Input de Búsqueda */}
           <div className="relative flex-1">

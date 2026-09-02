@@ -252,6 +252,23 @@ export function StatisticsDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-12 max-w-7xl mx-auto">
+      {/* Header Card Propio de la Página */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs">
+        <div className="flex items-center gap-3.5 sm:gap-4">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs shrink-0">
+            <BarChart3 className="w-5 h-5 sm:w-5 sm:h-5" />
+          </div>
+          <div>
+            <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 leading-tight">
+              Estadísticas y Métricas
+            </h1>
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Rendimiento del estudio, facturación proyectada y análisis de ocupación en tiempo real
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Selector de Período y Pestañas */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-2.5 sm:space-y-3">
         {/* VISTA MOBILE: Segmented Control 2x2 nativo */}
