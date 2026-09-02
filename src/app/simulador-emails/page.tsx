@@ -113,59 +113,57 @@ export default function SimuladorEmailsPage() {
         </div>
 
         {/* Barra de Búsqueda y Filtros */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Input de Búsqueda */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por persona, correo, teléfono (ej. 11...), código o clase..."
-              className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm("")}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 absolute right-3 top-1/2 -translate-y-1/2 transition-colors cursor-pointer"
-                title="Limpiar búsqueda"
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3.5 sm:p-5 shadow-xs space-y-2.5 sm:space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+            {/* Input de Búsqueda */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nombre, correo, teléfono o código..."
+                className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 absolute right-3 top-1/2 -translate-y-1/2 transition-colors cursor-pointer"
+                  title="Limpiar búsqueda"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Selector de Estado */}
+            <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full sm:w-auto px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer focus:ring-2 focus:ring-indigo-500/20"
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
+                <option value="all">Todos los Estados ({emailLogs.length})</option>
+                <option value="sent">Confirmados</option>
+                <option value="cancelled">Cancelados</option>
+                <option value="rescheduled">Modificados</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Resumen de Resultados (Limpio y adaptado a Mobile) */}
+          <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800 font-medium">
+            <span>
+              {filteredLogs.length} {filteredLogs.length === 1 ? "notificación encontrada" : "notificaciones encontradas"}
+            </span>
+            {searchTerm && (
+              <span className="text-indigo-600 dark:text-indigo-400 font-semibold truncate max-w-[160px] sm:max-w-xs text-right">
+                Filtro: &quot;{searchTerm}&quot;
+              </span>
             )}
           </div>
-
-          {/* Selector de Estado */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer focus:ring-2 focus:ring-indigo-500/20"
-            >
-              <option value="all">Todos los Estados ({emailLogs.length})</option>
-              <option value="sent">Confirmados</option>
-              <option value="cancelled">Cancelados</option>
-              <option value="rescheduled">Modificados</option>
-            </select>
-          </div>
         </div>
-
-        {/* Resumen de Resultados */}
-        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <span>
-            {!isFiltering
-              ? `Mostrando las últimas ${filteredLogs.length} notificaciones registradas (escribe en el buscador para ver todo el historial)`
-              : `Mostrando ${filteredLogs.length} resultados encontrados de ${emailLogs.length} notificaciones`}
-          </span>
-          {searchTerm && (
-            <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
-              Filtrado por: &quot;{searchTerm}&quot;
-            </span>
-          )}
-        </div>
-      </div>
 
       {/* Contenedor de Resultados */}
       <div className="glass-card overflow-hidden">
