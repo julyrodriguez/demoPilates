@@ -13,8 +13,6 @@ import {
   CreditCard,
   Users,
   BarChart3,
-  ExternalLink,
-  ArrowRight,
   ShieldCheck,
   Zap,
   MousePointerClick,
@@ -26,7 +24,7 @@ export default function PaginaInformativa() {
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-16 pt-1 sm:pt-2">
         {/* ============================================================ */}
-        {/* HERO SECTION (Optimizada para Mobile & Desktop) */}
+        {/* HERO SECTION (Sin botones superiores para priorizar lectura) */}
         {/* ============================================================ */}
         <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 text-white p-5 sm:p-8 md:p-10 border border-indigo-800/40 shadow-xl">
           {/* Background Glows */}
@@ -46,24 +44,6 @@ export default function PaginaInformativa() {
             <p className="text-xs sm:text-sm md:text-base text-slate-300 leading-relaxed font-medium">
               Una plataforma integral, ágil y moderna diseñada para simplificar al 100% la administración de tu estudio de Pilates y brindar una experiencia de reserva impecable y autónoma a tus alumnas.
             </p>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-2">
-              <Link
-                href="/reservar"
-                target="_blank"
-                className="w-full sm:w-auto px-4 sm:px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-              >
-                <span>Explorar Portal Público de Reservas</span>
-                <ExternalLink className="w-4 h-4 shrink-0" />
-              </Link>
-              <Link
-                href="/"
-                className="w-full sm:w-auto px-4 sm:px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white border border-white/15 text-xs font-bold flex items-center justify-center gap-2 transition-all backdrop-blur-sm active:scale-[0.98]"
-              >
-                <span>Ir a la Agenda Semanal</span>
-                <ArrowRight className="w-4 h-4 shrink-0" />
-              </Link>
-            </div>
           </div>
         </section>
 
@@ -209,28 +189,17 @@ export default function PaginaInformativa() {
         {/* SECCIÓN 2: PORTAL PÚBLICO DE RESERVAS (/reservar) */}
         {/* ============================================================ */}
         <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-8 shadow-xs space-y-5 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800">
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
-                <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span>Experiencia Alumno</span>
-              </div>
-              <h2 className="text-base sm:text-2xl font-black text-slate-900 dark:text-slate-100">
-                ¿Cómo funciona el Portal Público de Reservas?
-              </h2>
-              <p className="text-[11px] sm:text-xs md:text-sm text-slate-500 dark:text-slate-400">
-                Diseñado para que cualquier alumna reserve en menos de 10 segundos desde su teléfono
-              </p>
+          <div className="space-y-1 pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+              <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Experiencia Alumno</span>
             </div>
-
-            <Link
-              href="/reservar"
-              target="_blank"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 text-white text-xs font-bold shadow-xs shrink-0 transition-all active:scale-[0.98]"
-            >
-              <span>Abrir /reservar</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </Link>
+            <h2 className="text-base sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+              ¿Cómo funciona el Portal Público de Reservas?
+            </h2>
+            <p className="text-[11px] sm:text-xs md:text-sm text-slate-500 dark:text-slate-400">
+              Diseñado para que cualquier alumna reserve en menos de 10 segundos desde su teléfono
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
@@ -277,7 +246,7 @@ export default function PaginaInformativa() {
         </section>
 
         {/* ============================================================ */}
-        {/* SECCIÓN 3: INVITACIÓN A PROBAR EL SISTEMA */}
+        {/* SECCIÓN 3: INVITACIÓN A PROBAR EL SISTEMA (Botones al final) */}
         {/* ============================================================ */}
         <section className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-8 border border-indigo-900/60 shadow-lg space-y-4 sm:space-y-5">
           <div className="flex items-center gap-3">
