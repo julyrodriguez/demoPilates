@@ -25,13 +25,13 @@ import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   {
-    href: "/info",
+    href: "/",
     label: "Página Informativa",
     icon: BookOpen,
     badge: "Guía",
   },
   {
-    href: "/",
+    href: "/calendario",
     label: "Calendario Semanal",
     icon: LayoutDashboard,
     badge: null,

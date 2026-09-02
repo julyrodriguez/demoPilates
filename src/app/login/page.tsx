@@ -50,7 +50,7 @@ export default function LoginPage() {
     try {
       await loginWithEmail(fullEmail, password);
       setTimeout(() => {
-        router.push("/info");
+        router.push("/");
       }, 500);
     } catch (err: any) {
       console.error(err);
