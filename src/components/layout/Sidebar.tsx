@@ -18,7 +18,6 @@ import {
   LogOut,
   BarChart3,
   Award,
-  MessageSquareQuote,
 } from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
@@ -71,12 +70,6 @@ const navItems = [
     label: "Correos y Notificaciones",
     icon: Mail,
     badge: null,
-  },
-  {
-    href: "/comentarios",
-    label: "Comentarios",
-    icon: MessageSquareQuote,
-    badge: "Prototipo",
   },
 ];
 
