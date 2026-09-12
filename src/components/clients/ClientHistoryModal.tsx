@@ -433,49 +433,53 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 max-w-2xl w-full shadow-2xl animate-modal my-auto sm:my-6 max-h-[94vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 gap-2">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm sm:text-lg shadow-sm shrink-0">
-              {client.name.charAt(0)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                <h2 className="text-sm sm:text-xl font-black text-slate-900 dark:text-slate-100 truncate">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs p-2.5 sm:p-4">
+      <div className="min-h-full flex items-center justify-center py-2 sm:py-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 max-w-2xl w-full shadow-2xl animate-modal max-h-[86dvh] sm:max-h-[90vh] flex flex-col my-auto">
+          {/* Header */}
+          <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 gap-2.5">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm sm:text-lg shadow-sm shrink-0 mt-0.5">
+                {client.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                    Ficha de Alumno
+                  </span>
+                  {assignedPlan && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                      {assignedPlan.name}
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-slate-100 truncate leading-snug">
                   {client.name}
                 </h2>
-                {assignedPlan && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
-                    {assignedPlan.name}
-                  </span>
-                )}
-              </div>
-              <div className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 font-medium">
-                {client.phone && <span className="whitespace-nowrap">📞 {client.phone}</span>}
-                {client.email && <span className="truncate max-w-[130px] xs:max-w-[190px] sm:max-w-none">✉️ {client.email}</span>}
-                {activePriceDisplay !== null ? (
-                  <span className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap">
-                    • {client.billingFrequency === "monthly" ? "Mensual" : "Semanal"}: ${activePriceDisplay.toLocaleString("es-AR")}
-                  </span>
-                ) : (
-                  <span className="text-slate-400 font-medium whitespace-nowrap">
-                    • Sin Plan (Clase suelta)
-                  </span>
-                )}
+                <div className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 font-medium pt-0.5">
+                  {client.phone && <span className="whitespace-nowrap">📞 {client.phone}</span>}
+                  {client.email && <span className="truncate max-w-[130px] xs:max-w-[190px] sm:max-w-none">✉️ {client.email}</span>}
+                  {activePriceDisplay !== null ? (
+                    <span className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap">
+                      • {client.billingFrequency === "monthly" ? "Mensual" : "Semanal"}: ${activePriceDisplay.toLocaleString("es-AR")}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 font-medium whitespace-nowrap">
+                      • Sin Plan (Clase suelta)
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 touch-manipulation cursor-pointer"
-            aria-label="Cerrar modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 touch-manipulation cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
         {/* Tab Navigation - Symmetric Segmented Control */}
         <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl sm:rounded-2xl mt-2.5 sm:mt-4 shrink-0 text-xs font-bold">
@@ -1067,6 +1071,7 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
           </button>
         </div>
       </div>
+    </div>
 
       {/* Confirmation Modal for Deleting Client */}
       <ConfirmModal
