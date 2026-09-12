@@ -434,16 +434,16 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl animate-modal my-4 sm:my-6 max-h-[92vh] flex flex-col">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 max-w-2xl w-full shadow-2xl animate-modal my-auto sm:my-6 max-h-[94vh] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 gap-2">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-base sm:text-lg shadow-sm shrink-0">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm sm:text-lg shadow-sm shrink-0">
               {client.name.charAt(0)}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-slate-100 truncate">
+                <h2 className="text-sm sm:text-xl font-black text-slate-900 dark:text-slate-100 truncate">
                   {client.name}
                 </h2>
                 {assignedPlan && (
@@ -452,15 +452,15 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                   </span>
                 )}
               </div>
-              <div className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 font-medium">
-                {client.phone && <span>📞 {client.phone}</span>}
-                {client.email && <span className="truncate max-w-[180px] sm:max-w-none">✉️ {client.email}</span>}
+              <div className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 font-medium">
+                {client.phone && <span className="whitespace-nowrap">📞 {client.phone}</span>}
+                {client.email && <span className="truncate max-w-[130px] xs:max-w-[190px] sm:max-w-none">✉️ {client.email}</span>}
                 {activePriceDisplay !== null ? (
-                  <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                  <span className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap">
                     • {client.billingFrequency === "monthly" ? "Mensual" : "Semanal"}: ${activePriceDisplay.toLocaleString("es-AR")}
                   </span>
                 ) : (
-                  <span className="text-slate-400 font-medium">
+                  <span className="text-slate-400 font-medium whitespace-nowrap">
                     • Sin Plan (Clase suelta)
                   </span>
                 )}
@@ -470,7 +470,7 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
 
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 touch-manipulation cursor-pointer"
             aria-label="Cerrar modal"
           >
             <X className="w-5 h-5" />
@@ -478,18 +478,18 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
         </div>
 
         {/* Tab Navigation - Symmetric Segmented Control */}
-        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl mt-3 sm:mt-4 shrink-0 text-xs font-bold">
+        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl sm:rounded-2xl mt-2.5 sm:mt-4 shrink-0 text-xs font-bold">
           <button
             type="button"
             onClick={() => setActiveTab("month")}
-            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
+            className={`py-2 px-1 rounded-lg sm:rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center cursor-pointer ${
               activeTab === "month"
                 ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             }`}
           >
             <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">
+            <span className="truncate text-[11px] sm:text-xs">
               <span className="sm:hidden">Mes</span>
               <span className="hidden sm:inline">Clases del Mes</span>
             </span>
@@ -498,15 +498,15 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
           <button
             type="button"
             onClick={() => setActiveTab("fixed")}
-            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
+            className={`py-2 px-1 rounded-lg sm:rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center cursor-pointer ${
               activeTab === "fixed"
                 ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             }`}
           >
             <Repeat className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">
-              <span className="sm:hidden">Fija</span>
+            <span className="truncate text-[11px] sm:text-xs">
+              <span className="sm:hidden">Fijas</span>
               <span className="hidden sm:inline">Reserva Fija</span>
             </span>
           </button>
@@ -514,14 +514,14 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
           <button
             type="button"
             onClick={() => setActiveTab("all")}
-            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
+            className={`py-2 px-1 rounded-lg sm:rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center cursor-pointer ${
               activeTab === "all"
                 ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             }`}
           >
             <ListOrdered className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">
+            <span className="truncate text-[11px] sm:text-xs">
               <span className="sm:hidden">Historial</span>
               <span className="hidden sm:inline">Historial ({historyBookings.length > 0 ? historyBookings.length : 10})</span>
             </span>
@@ -530,15 +530,15 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
           <button
             type="button"
             onClick={() => setActiveTab("settings")}
-            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
+            className={`py-2 px-1 rounded-lg sm:rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center cursor-pointer ${
               activeTab === "settings"
                 ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             }`}
           >
             <Settings2 className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">
-              <span className="sm:hidden">Ajustes</span>
+            <span className="truncate text-[11px] sm:text-xs">
+              <span className="sm:hidden">Plan</span>
               <span className="hidden sm:inline">Ajustes de Plan</span>
             </span>
           </button>
@@ -550,24 +550,24 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
           {activeTab === "month" && (
             <div className="space-y-3">
               {/* Month Navigation Toolbar */}
-              <div className="flex items-center justify-between p-2 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 gap-2">
+              <div className="flex items-center justify-between p-1.5 sm:p-2 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   onClick={handlePrevMonth}
-                  className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                  className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs shrink-0"
                   title="Mes anterior"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
 
-                <div className="flex items-center gap-2 min-w-0">
-                  <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 justify-center">
+                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   
                   {/* Quick Month Select */}
                   <select
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="bg-transparent font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-hidden py-1 px-1.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors"
+                    className="bg-transparent font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-hidden py-1 px-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors truncate max-w-[140px] xs:max-w-[190px] sm:max-w-none"
                   >
                     {availableMonths.map((m) => (
                       <option key={m} value={m} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 font-bold">
@@ -580,7 +580,7 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                     <button
                       type="button"
                       onClick={handleCurrentMonth}
-                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 cursor-pointer transition-colors shrink-0"
+                      className="px-2 py-0.5 rounded-md sm:rounded-lg text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 cursor-pointer transition-colors shrink-0"
                     >
                       Hoy
                     </button>
@@ -590,7 +590,7 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                 <button
                   type="button"
                   onClick={handleNextMonth}
-                  className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                  className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs shrink-0"
                   title="Mes siguiente"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -598,10 +598,10 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
               </div>
 
               {/* Monthly Overview Card */}
-              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
+              <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2.5 sm:space-y-3 shadow-2xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-slate-900 dark:text-slate-100 flex items-center gap-1.5 sm:gap-2 flex-wrap">
                       <span>Consumo de {formatMonthYearHeader(selectedMonth)}</span>
                       {assignedPlan && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
@@ -609,7 +609,7 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    <div className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                       {client.planId ? (
                         <span>
                           {effectiveUsed} de {monthlyUsage.total} clases del mes usadas
@@ -623,9 +623,9 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                   </div>
 
                   {client.planId && (
-                    <div className="shrink-0 flex items-center gap-2">
+                    <div className="shrink-0 flex items-center justify-between sm:justify-start gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800/80">
                       <span
-                        className={`px-2.5 py-1 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 ${
+                        className={`px-2.5 py-1 rounded-xl text-[11px] sm:text-xs font-bold inline-flex items-center gap-1.5 ${
                           isExceeded
                             ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30"
                             : isComplete
@@ -744,36 +744,36 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                     return (
                       <div
                         key={b.id}
-                        className={`p-3 sm:p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                        className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 text-xs ${
                           isCancelled
                             ? "bg-slate-50/50 dark:bg-slate-950/30 border-slate-200/60 dark:border-slate-800/60 opacity-60"
                             : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xs hover:border-indigo-200 dark:hover:border-indigo-800/60"
                         }`}
                       >
-                        <div className="flex items-start gap-3 min-w-0">
+                        <div className="flex items-center sm:items-start gap-2.5 sm:gap-3 min-w-0">
                           {/* Date badge */}
-                          <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border ${
+                          <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border ${
                             isCancelled
                               ? "bg-slate-100 dark:bg-slate-800 border-slate-200 text-slate-400"
                               : "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-300"
                           }`}>
-                            <span className="text-[10px] font-bold uppercase leading-none">
+                            <span className="text-[9px] sm:text-[10px] font-bold uppercase leading-none">
                               {dateInfo.dayName.slice(0, 3)}
                             </span>
-                            <span className="text-sm font-black leading-tight">
+                            <span className="text-xs sm:text-sm font-black leading-tight">
                               {dateInfo.dayNumber}
                             </span>
                           </div>
 
-                          <div className="space-y-1 min-w-0">
-                            <div className="font-black text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <div className="font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
                               <span className={isCancelled ? "line-through text-slate-400" : ""}>
                                 {b.shiftTitle}
                               </span>
                               <DisciplineBadge discipline={b.discipline} size="sm" />
                             </div>
 
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-medium">
+                            <div className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 font-medium">
                               <span>📅 {dateInfo.full}</span>
                               <span>⏰ {b.shiftTime} hs</span>
                               {b.instructorName && <span>👤 {b.instructorName}</span>}
@@ -782,21 +782,22 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                           </div>
                         </div>
 
-                        <div className="self-end sm:self-center shrink-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800/60 shrink-0">
+                          <span className="sm:hidden text-[10px] text-slate-400 font-medium">Estado:</span>
                           {isCancelled ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                            <span className="px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">
                               Cancelada
                             </span>
                           ) : b.status === "attended" ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                            <span className="px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                               Asistió
                             </span>
                           ) : b.status === "no_show" ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30">
+                            <span className="px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30">
                               ✕ Ausente
                             </span>
                           ) : (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
+                            <span className="px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
                               Confirmada
                             </span>
                           )}
@@ -843,21 +844,22 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
                   {historyBookings.map((b) => (
                     <div
                       key={b.id}
-                      className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                      className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                     >
                       <div className="min-w-0">
-                        <div className="font-black text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
+                        <div className="font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
                           <span>{b.shiftTitle}</span>
                           <DisciplineBadge discipline={b.discipline} size="sm" />
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-500 mt-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-slate-500 mt-0.5">
                           <span>📅 {b.shiftDate}</span>
                           <span>⏰ {b.shiftTime} hs</span>
-                          <span>Prof. {b.instructorName}</span>
+                          {b.instructorName && <span>Prof. {b.instructorName}</span>}
                         </div>
                       </div>
 
-                      <div className="self-end sm:self-center">
+                      <div className="flex items-center justify-between sm:justify-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800/60">
+                        <span className="sm:hidden text-[10px] text-slate-400 font-medium">Estado:</span>
                         {b.status === "cancelled" ? (
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600">
                             Cancelada

@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
-import { useData } from "@/context/DataContext";
 import {
   Sparkles,
   Calendar,
@@ -18,29 +17,12 @@ import {
   Zap,
   MousePointerClick,
   Smartphone,
-  Database,
-  RotateCcw,
   Bell,
   Repeat,
   CheckCircle2,
-  Lock,
 } from "lucide-react";
 
 export default function PaginaInformativa() {
-  const { resetToMockData } = useData();
-  const [isResetting, setIsResetting] = useState(false);
-
-  const handleReset = async () => {
-    if (confirm("¿Deseas restablecer los datos de prueba a los valores iniciales? Esto reiniciará las clases, reservas y alumnos en tu navegador.")) {
-      setIsResetting(true);
-      try {
-        await resetToMockData();
-      } finally {
-        setIsResetting(false);
-      }
-    }
-  };
-
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-16 pt-1 sm:pt-2">
@@ -65,78 +47,6 @@ export default function PaginaInformativa() {
             <p className="text-xs sm:text-sm md:text-base text-slate-300 leading-relaxed font-medium">
               Una plataforma integral, ágil y moderna diseñada para simplificar al 100% la administración de tu estudio de Pilates y brindar una experiencia de reserva impecable y autónoma a tus alumnas.
             </p>
-          </div>
-        </section>
-
-        {/* ============================================================ */}
-        {/* SECCIÓN MODO DEMO: GUARDADO LOCALCACHE & DIFERENCIAS */}
-        {/* ============================================================ */}
-        <section className="rounded-3xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
-                <Database className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-md bg-indigo-600/10 dark:bg-indigo-400/10 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] uppercase tracking-wider">
-                    Modo Demostración Seguro
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    LocalCache Activo
-                  </span>
-                </div>
-                <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">
-                  ¿Cómo funciona este entorno Demo?
-                </h2>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
-                  Esta versión de demostración está diseñada para que puedas <strong>probar absolutamente todo sin limitaciones</strong>. A diferencia del sistema en producción conectado a la base de datos de una clienta, en esta demo:
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={isResetting}
-              className="self-start sm:self-center px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all shadow-xs flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? "animate-spin" : ""}`} />
-              <span>Restablecer Datos de Prueba</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
-                <Lock className="w-4 h-4" />
-                <span>Acceso Libre Sin Contraseñas</span>
-              </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                Ideal para mostrar en el local o en mostrador. Ingresas directo al panel de administración sin login ni barreras de acceso.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
-                <Database className="w-4 h-4" />
-                <span>Persistencia en Navegador (LocalCache)</span>
-              </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                Todas las clases que crees, cancelaciones o reservas que hagas se guardan en el LocalStorage de tu navegador para que puedas navegar entre páginas sin perder tu progreso.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
-                <Zap className="w-4 h-4" />
-                <span>Velocidad Instantánea</span>
-              </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                Al procesarse 100% de manera local en tu equipo, las respuestas, reservas y filtros responden al instante sin demoras de red.
-              </p>
-            </div>
           </div>
         </section>
 

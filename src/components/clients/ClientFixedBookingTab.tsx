@@ -802,7 +802,7 @@ export function ClientFixedBookingTab({
                 return (
                   <label
                     key={slot.date}
-                    className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-2 select-none ${
+                    className={`p-2.5 sm:p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 select-none ${
                       isDisabled
                         ? "bg-slate-100/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60 cursor-not-allowed"
                         : isChecked
@@ -810,13 +810,13 @@ export function ClientFixedBookingTab({
                         : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
                       <input
                         type="checkbox"
                         checked={isChecked && !isDisabled}
                         disabled={isDisabled}
                         onChange={() => toggleDateCheck(slot.date)}
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed mt-0.5 sm:mt-0"
                       />
                       <div>
                         <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
@@ -840,7 +840,7 @@ export function ClientFixedBookingTab({
                       </div>
                     </div>
 
-                    <div className="shrink-0 text-right">
+                    <div className="self-end sm:self-center shrink-0 text-right">
                       {isPast ? (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300/80 dark:border-slate-700">
                           Semana pasada
