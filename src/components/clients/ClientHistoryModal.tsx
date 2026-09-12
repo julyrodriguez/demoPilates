@@ -433,9 +433,9 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs p-2.5 sm:p-4">
-      <div className="min-h-full flex items-center justify-center py-2 sm:py-6">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 max-w-2xl w-full shadow-2xl animate-modal max-h-[86dvh] sm:max-h-[90vh] flex flex-col my-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs p-3 sm:p-4">
+      <div className="min-h-full flex items-start sm:items-center justify-center pt-6 pb-6 sm:py-8">
+        <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl animate-modal max-h-[88dvh] sm:max-h-[90vh] flex flex-col ring-1 ring-black/10 my-auto sm:my-0">
           {/* Header */}
           <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 gap-2.5">
             <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1">
