@@ -1,15 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { 
-  User, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut,
-  updateProfile
-} from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase";
+import React, { createContext, useContext, useState } from "react";
+import { User } from "firebase/auth";
 
 interface AuthContextType {
   user: User | null;
@@ -19,62 +11,43 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
+const DEMO_USER: any = {
+  uid: "demo-admin-uid",
+  email: "admin@demopilates.com",
+  displayName: "Administrador Demo",
+  emailVerified: true,
+  isAnonymous: false,
+  metadata: {},
+  providerData: [],
+  refreshToken: "",
+  tenantId: null,
+  phoneNumber: "+54 9 11 1234-5678",
+  photoURL: null,
+  providerId: "demo",
+};
+
 const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
+  user: DEMO_USER,
+  loading: false,
   loginWithEmail: async () => {},
   registerWithEmail: async () => {},
   logout: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(DEMO_USER);
+  const [loading] = useState(false);
 
-  useEffect(() => {
-    const auth = getFirebaseAuth();
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const loginWithEmail = async (email: string, pass: string) => {
-    const auth = getFirebaseAuth();
-    if (!auth) {
-      throw new Error("Firebase Auth no está inicializado. Verifica las variables de entorno de Firebase.");
-    }
-    const res = await signInWithEmailAndPassword(auth, email.trim(), pass);
-    setUser(res.user);
+  const loginWithEmail = async () => {
+    setUser(DEMO_USER);
   };
 
-  const registerWithEmail = async (email: string, pass: string, displayName?: string) => {
-    const auth = getFirebaseAuth();
-    if (!auth) {
-      throw new Error("Firebase Auth no está inicializado. Verifica las variables de entorno de Firebase.");
-    }
-    const res = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-    if (displayName && res.user) {
-      try {
-        await updateProfile(res.user, { displayName });
-      } catch {}
-    }
-    setUser(res.user);
+  const registerWithEmail = async () => {
+    setUser(DEMO_USER);
   };
 
   const logout = async () => {
-    const auth = getFirebaseAuth();
-    if (auth) {
-      await signOut(auth);
-    }
-    setUser(null);
+    setUser(DEMO_USER);
   };
 
   return (

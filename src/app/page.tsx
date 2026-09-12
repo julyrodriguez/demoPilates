@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
+import { useData } from "@/context/DataContext";
 import {
   Sparkles,
   Calendar,
@@ -17,9 +18,29 @@ import {
   Zap,
   MousePointerClick,
   Smartphone,
+  Database,
+  RotateCcw,
+  Bell,
+  Repeat,
+  CheckCircle2,
+  Lock,
 } from "lucide-react";
 
 export default function PaginaInformativa() {
+  const { resetToMockData } = useData();
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleReset = async () => {
+    if (confirm("¿Deseas restablecer los datos de prueba a los valores iniciales? Esto reiniciará las clases, reservas y alumnos en tu navegador.")) {
+      setIsResetting(true);
+      try {
+        await resetToMockData();
+      } finally {
+        setIsResetting(false);
+      }
+    }
+  };
+
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-16 pt-1 sm:pt-2">
@@ -34,16 +55,88 @@ export default function PaginaInformativa() {
           <div className="relative z-10 max-w-3xl space-y-3.5 sm:space-y-4">
             <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
               <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-300 shrink-0" />
-              <span className="truncate">Demo Pilates • Panel & Guía del Sistema</span>
+              <span className="truncate">Demo Pilates • Panel Interactivo & Guía del Sistema</span>
             </div>
 
             <h1 className="text-xl sm:text-3xl md:text-5xl font-black tracking-tight leading-tight sm:leading-tight">
-              Bienvenido a tu próxima página de gestión de turnos.
+              Bienvenido a tu plataforma de gestión de turnos.
             </h1>
 
             <p className="text-xs sm:text-sm md:text-base text-slate-300 leading-relaxed font-medium">
               Una plataforma integral, ágil y moderna diseñada para simplificar al 100% la administración de tu estudio de Pilates y brindar una experiencia de reserva impecable y autónoma a tus alumnas.
             </p>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* SECCIÓN MODO DEMO: GUARDADO LOCALCACHE & DIFERENCIAS */}
+        {/* ============================================================ */}
+        <section className="rounded-3xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                <Database className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-md bg-indigo-600/10 dark:bg-indigo-400/10 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] uppercase tracking-wider">
+                    Modo Demostración Seguro
+                  </span>
+                  <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    LocalCache Activo
+                  </span>
+                </div>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">
+                  ¿Cómo funciona este entorno Demo?
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
+                  Esta versión de demostración está diseñada para que puedas <strong>probar absolutamente todo sin limitaciones</strong>. A diferencia del sistema en producción conectado a la base de datos de una clienta, en esta demo:
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={isResetting}
+              className="self-start sm:self-center px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all shadow-xs flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? "animate-spin" : ""}`} />
+              <span>Restablecer Datos de Prueba</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                <Lock className="w-4 h-4" />
+                <span>Acceso Libre Sin Contraseñas</span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                Ideal para mostrar en el local o en mostrador. Ingresas directo al panel de administración sin login ni barreras de acceso.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                <Database className="w-4 h-4" />
+                <span>Persistencia en Navegador (LocalCache)</span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                Todas las clases que crees, cancelaciones o reservas que hagas se guardan en el LocalStorage de tu navegador para que puedas navegar entre páginas sin perder tu progreso.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                <Zap className="w-4 h-4" />
+                <span>Velocidad Instantánea</span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                Al procesarse 100% de manera local en tu equipo, las respuestas, reservas y filtros responden al instante sin demoras de red.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -57,94 +150,94 @@ export default function PaginaInformativa() {
             </div>
             <div>
               <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-slate-100">
-                ¿Qué puedes hacer como Administrador?
+                Módulos y Capacidades del Sistema
               </h2>
               <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
-                Todo el control de tu estudio centralizado en una única herramienta inteligente
+                Todas las herramientas avanzadas integradas y disponibles para probar
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {/* 1. Calendario */}
+            {/* 1. Calendario con Ticker Broker */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                1. Agenda y Calendario Semanal
+                1. Agenda Semanal & Ticker en Vivo
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Visualiza toda la semana en tiempo real: clases programadas, profesores a cargo, salas asignadas y nivel de ocupación instantáneo con barras de aforo.
+                Visualiza la semana completa, salas asignadas, barras de aforo y un ticker en vivo estilo broker en la cabecera que transmite las últimas reservas realizadas al instante.
               </p>
             </div>
 
-            {/* 2. Gestión de Clases */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                2. Programación de Clases & Cupos
-              </h3>
-              <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Crea y edita clases en segundos. Define cupos máximos (ej. 4 reformers), profesores, disciplinas y permite lista de espera automática cuando se llenan.
-              </p>
-            </div>
-
-            {/* 3. Control de Reservas & Asistencia */}
+            {/* 2. Reservas Fijas Recurrentes */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-2xs">
+                <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
+                2. Reservas Fijas Recurrentes
+              </h3>
+              <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Asigna a una alumna sus turnos fijos (ej. Martes y Jueves a las 15:00 hs) para todo el mes con 1 clic. El sistema reserva sus lugares automáticamente y bloquea semanas pasadas.
+              </p>
+            </div>
+
+            {/* 3. Control de Asistencia y Ausentes */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs">
                 <BookmarkCheck className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                3. Reservas y Asistencia en 1 Clic
+                3. Presentes y Ausentes Visuales
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Revisa la lista de inscriptos en cada clase, marca presencia / inasistencia con un toque o agrega inscripciones manuales para alumnas que reservan por mostrador.
+                Pasa lista en 1 toque. Marca quién asistió o quién faltó (con distintivo rojo en la grilla del calendario) para un control exacto de reposiciones y cupos.
               </p>
             </div>
 
-            {/* 4. WhatsApp Directo */}
+            {/* 4. WhatsApp y Avisos de Clases Restantes */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-2xs">
                 <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                4. Integración Directa con WhatsApp
+                4. WhatsApp: Recordatorios y Clases Restantes
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Envía recordatorios personalizados a la alumna directamente a su WhatsApp en 1 solo clic. Abre tu app de WhatsApp con el mensaje prearmado listo para enviar.
+                Envía recordatorios de asistencia y notificaciones a alumnas sobre cuántas clases les quedan en su plan mensual con un mensaje listo para enviar en 1 toque.
               </p>
             </div>
 
-            {/* 5. Notificaciones Automáticas por Email */}
+            {/* 5. Notificaciones en Tiempo Real */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-2xs">
-                <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                5. Correos Transaccionales Automáticos
+                5. Campanita & Notificaciones de Pantalla
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Todo movimiento (reserva, cambio de fecha o cancelación) dispara un email automático con diseño oficial, comprobante con código y botón de autogestión.
+                Banners animados, sonido configurable y campanita con contador en tiempo real cada vez que una alumna reserva o cancela su lugar en el estudio.
               </p>
             </div>
 
-            {/* 6. Planes y Membresías */}
+            {/* 6. Planes, Membresías y Pagos */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-2xs">
                 <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                6. Planes, Membresías y Pagos
+                6. Planes Mensuales & Semanales
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Configura abonos mensuales (1x, 2x, 3x por semana, pase libre), ajusta aranceles personalizados por alumna y lleva control de cuotas al día vs pendientes.
+                Control mensual unificado de abonos (1x, 2x, 3x por semana, pase libre), cómputo de consumos reales y conmutador de pago al día vs pendiente.
               </p>
             </div>
 
-            {/* 7. CRM de Alumnos */}
+            {/* 7. CRM de Alumnos con Historial */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shadow-2xs">
                 <Users className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -153,27 +246,27 @@ export default function PaginaInformativa() {
                 7. Ficha y Directorio de Alumnos (CRM)
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Base de datos completa con historial de asistencia de cada alumna, turnos tomados, plan vigente, notas posturales y acceso directo a llamada o WhatsApp.
+                Directorio completo con historial de clases mes a mes, turnos tomados, plan vigente, notas posturales y filtro por bajo consumo de abonos.
               </p>
             </div>
 
-            {/* 8. Estadísticas */}
+            {/* 8. Estadísticas & Finanzas */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shadow-2xs">
                 <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                8. Panel de Estadísticas & Finanzas
+                8. Panel de Estadísticas & Facturación
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                 Métricas financieras del mes, proyección anual, arancel promedio por alumna, distribución de planes y ranking de disciplinas más demandadas.
               </p>
             </div>
 
-            {/* 9. Simulador y Auditoría */}
+            {/* 9. Simulador y Auditoría de Emails */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs">
-                <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
                 9. Centro de Auditoría de Emails
@@ -198,7 +291,7 @@ export default function PaginaInformativa() {
               ¿Cómo funciona el Portal Público de Reservas?
             </h2>
             <p className="text-[11px] sm:text-xs md:text-sm text-slate-500 dark:text-slate-400">
-              Diseñado para que cualquier alumna reserve en menos de 10 segundos desde su teléfono
+              Diseñado para que cualquier alumna reserve en menos de 10 segundos desde su teléfono móvil
             </p>
           </div>
 
@@ -212,7 +305,7 @@ export default function PaginaInformativa() {
                 Sin Login ni Contraseñas
               </h4>
               <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Las alumnas no necesitan recordar contraseñas ni registrarse previamente. Eligen el día en el carrusel interactivo, seleccionan la clase y reservan al instante.
+                Las alumnas no necesitan recordar contraseñas ni registrarse previamente. Eligen el día en el carrusel interactivo (semana actual y siguiente), eligen la clase y reservan al instante.
               </p>
             </div>
 

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { usePathname } from "next/navigation";
 import { Shift, Booking, Instructor, Client, EmailLog, StudioSettings, ShiftStatus, Discipline, Plan, FeedbackComment } from "@/types";
 import {
+  generateDynamicDemoData,
   initialShifts,
   initialBookings,
   initialInstructors,
@@ -13,6 +14,8 @@ import {
   initialDisciplines,
   initialPlans,
 } from "@/lib/mockData";
+import { generateBookingSearchKeywords } from "@/lib/searchKeywords";
+import { parseShiftDateTime, isShiftInFuture, isShiftPast, getHoursUntilShift } from "@/lib/dateUtils";
 import { getFirebaseDb } from "@/lib/firebase";
 import {
   collection,
@@ -103,6 +106,13 @@ interface DataContextType {
     planName: string;
     hasPlan: boolean;
   };
+  getClientMonthlyUsage: (clientIdOrEmail: string, targetMonthOrDate?: string) => {
+    used: number;
+    total: number;
+    remaining: number;
+    planName: string;
+    hasPlan: boolean;
+  };
   toggleClientWeeklyPayment: (clientId: string, mondayDateStr: string) => Promise<void>;
   toggleClientMonthlyPayment: (clientId: string, monthKey: string) => Promise<void>;
   addShift: (shift: Omit<Shift, "id" | "bookedCount" | "status" | "createdAt">) => Promise<Shift>;
@@ -142,12 +152,34 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY_PREFIX = "pilates_app_v2_";
+const LOCAL_STORAGE_KEY_PREFIX = "demopilates_cache_v1_";
 
 function calculateShiftStatus(capacity: number, bookedCount: number): ShiftStatus {
   if (bookedCount >= capacity) return "full";
   if (bookedCount >= capacity - 2 && capacity > 2) return "almost_full";
   return "available";
+}
+
+function migrateWeeklyToMonthlyUsage(weeklyUsageMap?: Record<string, number>): Record<string, number> {
+  const monthly: Record<string, number> = {};
+  if (!weeklyUsageMap) return monthly;
+
+  Object.entries(weeklyUsageMap).forEach(([mondayStr, count]) => {
+    if (typeof count === "number" && count > 0) {
+      try {
+        const mon = new Date(mondayStr + "T12:00:00");
+        const midWeek = new Date(mon);
+        midWeek.setDate(mon.getDate() + 3);
+        const monthKey = midWeek.toISOString().slice(0, 7);
+        monthly[monthKey] = (monthly[monthKey] || 0) + count;
+      } catch {
+        const fallbackMonth = mondayStr.slice(0, 7);
+        monthly[fallbackMonth] = (monthly[fallbackMonth] || 0) + count;
+      }
+    }
+  });
+
+  return monthly;
 }
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
@@ -226,203 +258,62 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     async function initRealtimeData() {
       try {
-        // Limpiar caches anteriores con datos de muestra
-        ["shifts", "bookings", "instructors", "clients", "emails"].forEach((k) => {
-          localStorage.removeItem("pilates_app_" + k);
-        });
-
-        // 1. Cargar caché de LocalStorage para renderizado inicial instantáneo
+        const cachedShifts = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "shifts");
+        const cachedBookings = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "bookings");
+        const cachedInstructors = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "instructors");
+        const cachedClients = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "clients");
+        const cachedEmails = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "emails");
         const cachedSettings = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "settings");
         const cachedDisciplines = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "disciplines");
         const cachedPlans = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "plans");
 
-        if (cachedSettings) {
+        let hasData = false;
+        if (cachedShifts) {
           try {
-            setSettings(JSON.parse(cachedSettings));
-          } catch {}
-        }
-        if (cachedDisciplines) {
-          try {
-            setDisciplines(JSON.parse(cachedDisciplines));
-          } catch {}
-        }
-        if (cachedPlans) {
-          try {
-            setPlans(JSON.parse(cachedPlans));
-          } catch {}
-        }
-
-        if (!isPublicRoute) {
-          const cachedShifts = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "shifts");
-          const cachedBookings = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "bookings");
-          const cachedInstructors = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "instructors");
-          const cachedClients = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "clients");
-          const cachedEmails = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + "emails");
-
-          if (cachedShifts) {
-            try {
-              setShifts(JSON.parse(cachedShifts));
-            } catch {}
-          }
-          if (cachedBookings) {
-            try {
-              setBookings(JSON.parse(cachedBookings));
-            } catch {}
-          }
-          if (cachedInstructors) {
-            try {
-              setInstructors(JSON.parse(cachedInstructors));
-            } catch {}
-          }
-          if (cachedClients) {
-            try {
-              setRawClients(JSON.parse(cachedClients));
-            } catch {}
-          }
-          if (cachedEmails) {
-            try {
-              setEmailLogs(JSON.parse(cachedEmails));
-            } catch {}
-          }
-        }
-
-        // 2. Suscribirse a Firestore en tiempo real con onSnapshot (Fuente única de la verdad)
-        const db = getFirebaseDb();
-        if (db) {
-          try {
-            // Si es ruta pública (/reservar, /cancelar), no suscribimos a colecciones privadas
-            if (!isPublicRoute) {
-              // Alumnos / Clientes en tiempo real
-              const unsubClients = onSnapshot(
-                collection(db, "pilates_clients"),
-                (snap) => {
-                  if (isMounted) {
-                    const dbClients = snap.docs.map((d) => d.data() as Client);
-                    setRawClients(dbClients);
-                    setIsFirebaseActive(true);
-                    setLoading(false);
-                  }
-                },
-                (err) => {
-                  console.warn("Realtime clients listener error:", err);
-                  if (isMounted) setLoading(false);
-                }
-              );
-              unsubscribes.push(unsubClients);
-
-              // Instructores en tiempo real
-              const unsubInstructors = onSnapshot(
-                collection(db, "pilates_instructors"),
-                (snap) => {
-                  if (isMounted) {
-                    const dbInstructors = snap.docs.map((d) => d.data() as Instructor);
-                    setInstructors(dbInstructors);
-                  }
-                },
-                (err) => console.warn("Realtime instructors listener error:", err)
-              );
-              unsubscribes.push(unsubInstructors);
+            const parsed = JSON.parse(cachedShifts);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setShifts(parsed);
+              hasData = true;
             }
-
-            // Planes en tiempo real (Persistidos en pilates_settings/plans)
-            const unsubPlans = onSnapshot(
-              doc(db, "pilates_settings", "plans"),
-              (snap) => {
-                if (isMounted && snap.exists()) {
-                  const data = snap.data();
-                  if (data?.list && Array.isArray(data.list)) {
-                    setPlans(data.list as Plan[]);
-                  }
-                }
-              },
-              (err) => console.warn("Realtime plans listener error:", err)
-            );
-            unsubscribes.push(unsubPlans);
-
-            // Disciplinas en tiempo real (Persistidos en pilates_settings/disciplines)
-            const unsubDisciplines = onSnapshot(
-              doc(db, "pilates_settings", "disciplines"),
-              (snap) => {
-                if (isMounted && snap.exists()) {
-                  const data = snap.data();
-                  if (data?.list && Array.isArray(data.list)) {
-                    setDisciplines(data.list as Discipline[]);
-                  }
-                }
-              },
-              (err) => console.warn("Realtime disciplines listener error:", err)
-            );
-            unsubscribes.push(unsubDisciplines);
-
-            // Comentarios y Feedback en tiempo real (Persistidos en pilates_settings/feedback_comments)
-            const unsubFeedback = onSnapshot(
-              doc(db, "pilates_settings", "feedback_comments"),
-              (snap) => {
-                if (isMounted) {
-                  if (snap.exists()) {
-                    const data = snap.data();
-                    if (data?.list && Array.isArray(data.list)) {
-                      setFeedbackComments(data.list as FeedbackComment[]);
-                    }
-                  }
-                  setFeedbackLoaded(true);
-                }
-              },
-              (err) => {
-                console.warn("Realtime feedback listener error:", err);
-                if (isMounted) setFeedbackLoaded(true);
-              }
-            );
-            unsubscribes.push(unsubFeedback);
-
-            // Settings en tiempo real
-            const unsubSettings = onSnapshot(
-              collection(db, "pilates_settings"),
-              async (snap) => {
-                if (isMounted && !snap.empty) {
-                  const generalDoc = snap.docs.find((d) => d.id === "general");
-                  if (generalDoc) {
-                    const loaded = generalDoc.data() as Partial<StudioSettings>;
-                    const officialAddress = "Av. Corrientes 1111, CABA";
-                    const officialStudioName = "Demo Pilates";
-                    const officialInstagram = "@rodriguezjuliaan";
-
-                    setSettings({
-                      ...initialStudioSettings,
-                      ...loaded,
-                      address: officialAddress,
-                      studioName: officialStudioName,
-                      instagram: officialInstagram,
-                    });
-
-                    if (loaded.address !== officialAddress || loaded.studioName !== officialStudioName) {
-                      try {
-                        await setDoc(
-                          doc(db, "pilates_settings", "general"),
-                          {
-                            ...loaded,
-                            address: officialAddress,
-                            studioName: officialStudioName,
-                            instagram: officialInstagram,
-                          },
-                          { merge: true }
-                        );
-                      } catch (syncErr) {
-                        console.warn("Could not sync updated address to firestore:", syncErr);
-                      }
-                    }
-                  }
-                }
-              },
-              (err) => console.warn("Realtime settings listener error:", err)
-            );
-            unsubscribes.push(unsubSettings);
-          } catch (fireErr) {
-            console.warn("Firestore sync status (check rules):", fireErr);
-          }
+          } catch {}
         }
+
+        if (hasData) {
+          if (cachedBookings) try { setBookings(JSON.parse(cachedBookings)); } catch {}
+          if (cachedInstructors) try { setInstructors(JSON.parse(cachedInstructors)); } catch {}
+          if (cachedClients) try { setRawClients(JSON.parse(cachedClients)); } catch {}
+          if (cachedEmails) try { setEmailLogs(JSON.parse(cachedEmails)); } catch {}
+          if (cachedSettings) try { setSettings(JSON.parse(cachedSettings)); } catch {}
+          if (cachedDisciplines) try { setDisciplines(JSON.parse(cachedDisciplines)); } catch {}
+          if (cachedPlans) try { setPlans(JSON.parse(cachedPlans)); } catch {}
+        } else {
+          // Generar datos iniciales dinámicos para la demo interactiva
+          const seed = generateDynamicDemoData();
+          setShifts(seed.shifts);
+          setBookings(seed.bookings);
+          setInstructors(seed.instructors);
+          setRawClients(seed.clients);
+          setEmailLogs(seed.emailLogs);
+          setSettings(seed.settings);
+          setDisciplines(seed.disciplines);
+          setPlans(seed.plans);
+
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "shifts", JSON.stringify(seed.shifts));
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "bookings", JSON.stringify(seed.bookings));
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "instructors", JSON.stringify(seed.instructors));
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "clients", JSON.stringify(seed.clients));
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "emails", JSON.stringify(seed.emailLogs));
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "settings", JSON.stringify(seed.settings));
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "disciplines", JSON.stringify(seed.disciplines));
+            localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "plans", JSON.stringify(seed.plans));
+          } catch {}
+        }
+
+        setIsFirebaseActive(false);
+        setFeedbackLoaded(true);
       } catch (err) {
-        console.warn("Storage loading error:", err);
+        console.warn("Storage loading error in demo:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -458,8 +349,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       shiftData: Omit<Shift, "id" | "bookedCount" | "status" | "createdAt">
     ): Promise<Shift> => {
       const dayOfWeek = new Date(shiftData.date + "T12:00:00").getDay();
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        throw new Error("No está permitido crear clases los fines de semana (Sábados y Domingos).");
+      if (dayOfWeek === 0) {
+        throw new Error("No está permitido crear clases los domingos.");
       }
 
       const newShift: Shift = {
@@ -495,7 +386,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const nowStr = new Date().toISOString();
       const validShiftsData = shiftsData.filter((s) => {
         const day = new Date(s.date + "T12:00:00").getDay();
-        return day !== 0 && day !== 6;
+        return day !== 0;
       });
 
       const newShifts: Shift[] = validShiftsData.map((shiftData, idx) => ({
@@ -531,8 +422,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateShift = useCallback(async (id: string, updates: Partial<Shift>) => {
     if (updates.date) {
       const day = new Date(updates.date + "T12:00:00").getDay();
-      if (day === 0 || day === 6) {
-        throw new Error("No está permitido programar clases los fines de semana (Sábados y Domingos).");
+      if (day === 0) {
+        throw new Error("No está permitido programar clases los domingos.");
       }
     }
 
@@ -688,6 +579,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         price: targetShift.price,
         createdAt: new Date().toISOString(),
       };
+      newBooking.searchKeywords = generateBookingSearchKeywords(newBooking);
 
       // 1. Update Shift booked count
       const updatedBookedCount = targetShift.bookedCount + 1;
@@ -739,9 +631,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       const shiftMonday = getMondayDate(targetShift.date);
+      const shiftMonth = targetShift.date.slice(0, 7);
 
       if (existingClient) {
         const currentUsageMap = existingClient.weeklyUsageMap || {};
+        const currentMonthlyMap = existingClient.monthlyUsageMap || migrateWeeklyToMonthlyUsage(currentUsageMap);
         targetClient = {
           ...existingClient,
           name: trimmedName || existingClient.name,
@@ -755,6 +649,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           weeklyUsageMap: {
             ...currentUsageMap,
             [shiftMonday]: (currentUsageMap[shiftMonday] || 0) + 1,
+          },
+          monthlyUsageMap: {
+            ...currentMonthlyMap,
+            [shiftMonth]: (currentMonthlyMap[shiftMonth] || 0) + 1,
           },
         };
         setRawClients((prev) =>
@@ -777,6 +675,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           planClassesPerWeek: input.planClassesPerWeek,
           weeklyUsageMap: {
             [shiftMonday]: 1,
+          },
+          monthlyUsageMap: {
+            [shiftMonth]: 1,
           },
         };
         setRawClients((prev) => [targetClient, ...prev]);
@@ -804,31 +705,32 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         };
 
         setEmailLogs((prev) => [newEmailLog!, ...prev]);
+      }
 
-        // 5. Enviar Email Real vía Nodemailer en background
-        try {
-          fetch("/api/send-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: "confirmation",
-              recipientEmail: newBooking.clientEmail,
-              recipientName: newBooking.clientName,
-              shiftTitle: targetShift.title,
-              shiftDate: targetShift.date,
-              shiftTime: targetShift.startTime,
-              instructorName: targetShift.instructorName,
-              room: targetShift.room,
-              cancellationCode,
-              cancellationUrl,
-              studioName: settings.studioName,
-            }),
-          }).catch((mailErr) => {
-            console.warn("Error enviando email real de confirmación:", mailErr);
-          });
-        } catch (e) {
-          console.warn("Mail dispatch error:", e);
-        }
+      // 5. Enviar Email: comprobante a la alumna y reporte administrativo a selenepilates@gmail.com vía Nodemailer
+      try {
+        fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "confirmation",
+            recipientEmail: newBooking.clientEmail || "",
+            recipientName: newBooking.clientName,
+            clientPhone: newBooking.clientPhone || "",
+            shiftTitle: targetShift.title,
+            shiftDate: targetShift.date,
+            shiftTime: targetShift.startTime,
+            instructorName: targetShift.instructorName,
+            room: targetShift.room,
+            cancellationCode,
+            cancellationUrl,
+            studioName: settings.studioName,
+          }),
+        }).catch((mailErr) => {
+          console.warn("Error enviando email de confirmación o reporte admin:", mailErr);
+        });
+      } catch (e) {
+        console.warn("Mail dispatch error:", e);
       }
 
       // 6. Sync to Firebase Firestore (Persistir Shift, Booking, Alumno y Log)
@@ -844,6 +746,36 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           if (newEmailLog) {
             await setDoc(doc(db, "pilates_emails", newEmailLog.id), newEmailLog);
           }
+
+          // Registrar notificación en tiempo real y emitir eventos locales/cross-tab
+          const notifPayload = {
+            id: `booking-${newBooking.id}`,
+            type: "booking_created" as const,
+            title: "Nueva Reserva",
+            message: `${targetClient.name} reservó en ${targetShift.title}`,
+            clientName: targetClient.name,
+            shiftTitle: targetShift.title,
+            shiftDate: targetShift.date,
+            shiftTime: targetShift.startTime,
+            bookingId: newBooking.id,
+            shiftId: targetShift.id,
+            read: false,
+            createdAt: newBooking.createdAt || new Date().toISOString(),
+          };
+
+          if (typeof window !== "undefined") {
+            try {
+              window.dispatchEvent(new CustomEvent("pilates_booking_event", { detail: notifPayload }));
+              const bc = new BroadcastChannel("pilates_notifications_channel");
+              bc.postMessage(notifPayload);
+              bc.close();
+            } catch {}
+          }
+
+          try {
+            await setDoc(doc(db, "pilates_notifications", notifPayload.id), notifPayload);
+          } catch {}
+
           setIsFirebaseActive(true);
         } catch (e) {
           console.warn("Firestore save error on booking:", e);
@@ -895,17 +827,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Validar ventana de 3 horas de anticipación (a menos que sea forzado por el admin)
+      // Validar que el turno no haya finalizado ni esté a menos de 3 horas (a menos que sea forzado por el admin)
       if (!force) {
-        const shiftDateTime = new Date(`${targetBooking.shiftDate}T${targetBooking.shiftTime}:00`);
-        const now = new Date();
-        const diffMs = shiftDateTime.getTime() - now.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-
-        if (diffHours < 3) {
+        const hoursLeft = getHoursUntilShift(targetBooking.shiftDate, targetBooking.shiftTime);
+        if (hoursLeft <= 0) {
           return {
             success: false,
-            message: "Las cancelaciones solo pueden realizarse con un mínimo de 3 horas de anticipación. Para esta clase faltan menos de 3 horas (o ya ha comenzado). Si tienes un imprevisto de fuerza mayor, por favor comunícate directamente con el estudio.",
+            message: "No es posible cancelar un turno que ya ha comenzado o finalizado.",
+            booking: targetBooking,
+          };
+        }
+        if (hoursLeft < 3) {
+          return {
+            success: false,
+            message: "Las cancelaciones solo pueden realizarse con un mínimo de 3 horas de anticipación. Para esta clase faltan menos de 3 horas. Si tienes un imprevisto, por favor comunícate directamente con el estudio.",
             booking: targetBooking,
           };
         }
@@ -967,11 +902,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type: "cancellation",
-            recipientEmail: targetBooking.clientEmail,
+            recipientEmail: targetBooking.clientEmail || "",
             recipientName: targetBooking.clientName,
+            clientPhone: targetBooking.clientPhone || "",
             shiftTitle: targetBooking.shiftTitle,
             shiftDate: targetBooking.shiftDate,
             shiftTime: targetBooking.shiftTime,
+            cancellationCode: targetBooking.cancellationCode,
             studioName: settings.studioName,
           }),
         }).catch((err) => {
@@ -1022,12 +959,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             const newWeekCount = Math.max(0, (currentMap[shiftMonday] || 1) - 1);
             const updatedWeeklyMap = { ...currentMap, [shiftMonday]: newWeekCount };
 
+            const shiftMonth = targetBooking.shiftDate.slice(0, 7);
+            const currentMonthlyMap = clientObj.monthlyUsageMap || migrateWeeklyToMonthlyUsage(currentMap);
+            const newMonthCount = Math.max(0, (currentMonthlyMap[shiftMonth] || 1) - 1);
+            const updatedMonthlyMap = { ...currentMonthlyMap, [shiftMonth]: newMonthCount };
+
             await setDoc(
               doc(db, "pilates_clients", clientObj.id),
               {
                 totalBookings: Math.max(0, (clientObj.totalBookings || 1) - 1),
                 cancelledBookings: (clientObj.cancelledBookings || 0) + 1,
                 weeklyUsageMap: updatedWeeklyMap,
+                monthlyUsageMap: updatedMonthlyMap,
               },
               { merge: true }
             );
@@ -1040,6 +983,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                       totalBookings: Math.max(0, (c.totalBookings || 1) - 1),
                       cancelledBookings: (c.cancelledBookings || 0) + 1,
                       weeklyUsageMap: updatedWeeklyMap,
+                      monthlyUsageMap: updatedMonthlyMap,
                     }
                   : c
               )
@@ -1056,6 +1000,35 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               { merge: true }
             );
           }
+
+          // Registrar notificación de cancelación en tiempo real y emitir eventos locales/cross-tab
+          const cancelPayload = {
+            id: `booking-cancel-${targetBooking.id}-${Date.now()}`,
+            type: "booking_cancelled" as const,
+            title: "Reserva Cancelada",
+            message: `${targetBooking.clientName} canceló su turno en ${targetBooking.shiftTitle}`,
+            clientName: targetBooking.clientName,
+            shiftTitle: targetBooking.shiftTitle,
+            shiftDate: targetBooking.shiftDate,
+            shiftTime: targetBooking.shiftTime,
+            bookingId: targetBooking.id,
+            shiftId: targetBooking.shiftId,
+            read: false,
+            createdAt: new Date().toISOString(),
+          };
+
+          if (typeof window !== "undefined") {
+            try {
+              window.dispatchEvent(new CustomEvent("pilates_booking_event", { detail: cancelPayload }));
+              const bc = new BroadcastChannel("pilates_notifications_channel");
+              bc.postMessage(cancelPayload);
+              bc.close();
+            } catch {}
+          }
+
+          try {
+            await setDoc(doc(db, "pilates_notifications", cancelPayload.id), cancelPayload);
+          } catch {}
         } catch (e) {
           console.warn("Firestore cancellation sync warning:", e);
         }
@@ -1108,13 +1081,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Validar ventana de 3 horas de anticipación en el turno actual
-      const currentShiftDateTime = new Date(`${targetBooking.shiftDate}T${targetBooking.shiftTime}:00`);
-      const now = new Date();
-      const diffMs = currentShiftDateTime.getTime() - now.getTime();
-      const diffHours = diffMs / (1000 * 60 * 60);
-
-      if (diffHours < 3) {
+      // Validar que el turno actual no haya finalizado ni esté a menos de 3 horas
+      const hoursLeft = getHoursUntilShift(targetBooking.shiftDate, targetBooking.shiftTime);
+      if (hoursLeft <= 0) {
+        return {
+          success: false,
+          message: "No es posible modificar un turno que ya ha comenzado o finalizado.",
+          booking: targetBooking,
+        };
+      }
+      if (hoursLeft < 3) {
         return {
           success: false,
           message: "Las modificaciones de turno solo pueden realizarse con un mínimo de 3 horas de anticipación.",
@@ -1141,6 +1117,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      if (isShiftPast(newShift.date, newShift.startTime)) {
+        return {
+          success: false,
+          message: "No puedes reprogramar a un horario que ya ha comenzado o finalizado.",
+        };
+      }
+
       if (newShift.bookedCount >= newShift.capacity) {
         return {
           success: false,
@@ -1149,8 +1132,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Validar que el nuevo turno sea futuro
-      const newShiftDateTime = new Date(`${newShift.date}T${newShift.startTime}:00`);
-      if (newShiftDateTime.getTime() <= now.getTime()) {
+      if (isShiftPast(newShift.date, newShift.startTime)) {
         return {
           success: false,
           message: "No se puede seleccionar un turno que ya ha comenzado o pasado.",
@@ -1170,6 +1152,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         room: newShift.room,
         notes: targetBooking.notes ? `${targetBooking.notes} (Reprogramado)` : "Reprogramado",
       };
+      updatedBooking.searchKeywords = generateBookingSearchKeywords(updatedBooking);
 
       setBookings((prev) =>
         prev.map((b) => (b.id === targetBooking.id ? updatedBooking : b))
@@ -1222,8 +1205,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type: "rescheduled",
-            recipientEmail: targetBooking.clientEmail,
+            recipientEmail: targetBooking.clientEmail || "",
             recipientName: targetBooking.clientName,
+            clientPhone: targetBooking.clientPhone || "",
             shiftTitle: newShift.title,
             shiftDate: newShift.date,
             shiftTime: newShift.startTime,
@@ -1296,14 +1280,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               [oldMonday]: Math.max(0, (currentMap[oldMonday] || 1) - 1),
               [newMonday]: (currentMap[newMonday] || 0) + 1,
             };
+
+            const oldMonth = targetBooking.shiftDate.slice(0, 7);
+            const newMonth = newShift.date.slice(0, 7);
+            const currentMonthlyMap = clientObj.monthlyUsageMap || migrateWeeklyToMonthlyUsage(currentMap);
+            const updatedMonthlyMap = {
+              ...currentMonthlyMap,
+              [oldMonth]: Math.max(0, (currentMonthlyMap[oldMonth] || 1) - 1),
+              [newMonth]: (currentMonthlyMap[newMonth] || 0) + 1,
+            };
+
             await setDoc(
               doc(db, "pilates_clients", clientObj.id),
-              { weeklyUsageMap: updatedMap },
+              { weeklyUsageMap: updatedMap, monthlyUsageMap: updatedMonthlyMap },
               { merge: true }
             );
             setRawClients((prev) =>
               prev.map((c) =>
-                c.id === clientObj!.id ? { ...c, weeklyUsageMap: updatedMap } : c
+                c.id === clientObj!.id
+                  ? { ...c, weeklyUsageMap: updatedMap, monthlyUsageMap: updatedMonthlyMap }
+                  : c
               )
             );
           }
@@ -1387,6 +1383,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
+      // Send cancellation email & admin report if booking was cancelled by admin
+      if (!wasCancelled && isNowCancelled) {
+        try {
+          fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "cancellation",
+              recipientEmail: target.clientEmail || "",
+              recipientName: target.clientName,
+              clientPhone: target.clientPhone || "",
+              shiftTitle: target.shiftTitle,
+              shiftDate: target.shiftDate,
+              shiftTime: target.shiftTime,
+              cancellationCode: target.cancellationCode,
+              studioName: settings.studioName,
+            }),
+          }).catch((err) => {
+            console.warn("Error enviando email de cancelación en updateBookingStatus:", err);
+          });
+        } catch (e) {}
+      }
+
       // Sync with Firestore
       if (db) {
         try {
@@ -1414,7 +1433,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               );
             }
 
-            // Sync client weeklyUsageMap
+            // Sync client weeklyUsageMap and monthlyUsageMap
             let clientObj = clients.find(
               (c) => c.email.toLowerCase() === target!.clientEmail.toLowerCase()
             );
@@ -1433,17 +1452,57 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               const newWeekCount = Math.max(0, (currentMap[shiftMonday] || (isNowCancelled ? 1 : 0)) + delta);
               const updatedWeeklyMap = { ...currentMap, [shiftMonday]: newWeekCount };
 
+              const shiftMonth = target!.shiftDate.slice(0, 7);
+              const currentMonthlyMap = clientObj.monthlyUsageMap || migrateWeeklyToMonthlyUsage(currentMap);
+              const newMonthCount = Math.max(0, (currentMonthlyMap[shiftMonth] || (isNowCancelled ? 1 : 0)) + delta);
+              const updatedMonthlyMap = { ...currentMonthlyMap, [shiftMonth]: newMonthCount };
+
               await setDoc(
                 doc(db, "pilates_clients", clientObj.id),
-                { weeklyUsageMap: updatedWeeklyMap },
+                { weeklyUsageMap: updatedWeeklyMap, monthlyUsageMap: updatedMonthlyMap },
                 { merge: true }
               );
               setRawClients((prev) =>
                 prev.map((c) =>
-                  c.id === clientObj!.id ? { ...c, weeklyUsageMap: updatedWeeklyMap } : c
+                  c.id === clientObj!.id
+                    ? { ...c, weeklyUsageMap: updatedWeeklyMap, monthlyUsageMap: updatedMonthlyMap }
+                    : c
                 )
               );
             }
+          }
+
+          // Si el estado pasó a cancelado o ausente, notificar en tiempo real y emitir eventos locales/cross-tab
+          if (isNowCancelled || status === "no_show") {
+            const statusPayload = {
+              id: `booking-${status}-${target.id}-${Date.now()}`,
+              type: isNowCancelled ? ("booking_cancelled" as const) : ("booking_status_changed" as const),
+              title: isNowCancelled ? "Reserva Cancelada" : "Alumno Ausente",
+              message: isNowCancelled
+                ? `${target.clientName} canceló su turno en ${target.shiftTitle}`
+                : `${target.clientName} fue marcado/a ausente en ${target.shiftTitle}`,
+              clientName: target.clientName,
+              shiftTitle: target.shiftTitle,
+              shiftDate: target.shiftDate,
+              shiftTime: target.shiftTime,
+              bookingId: target.id,
+              shiftId: target.shiftId,
+              read: false,
+              createdAt: new Date().toISOString(),
+            };
+
+            if (typeof window !== "undefined") {
+              try {
+                window.dispatchEvent(new CustomEvent("pilates_booking_event", { detail: statusPayload }));
+                const bc = new BroadcastChannel("pilates_notifications_channel");
+                bc.postMessage(statusPayload);
+                bc.close();
+              } catch {}
+            }
+
+            try {
+              await setDoc(doc(db, "pilates_notifications", statusPayload.id), statusPayload);
+            } catch {}
           }
         } catch (e) {
           console.warn("Firestore sync booking status warning:", e);
@@ -1884,6 +1943,110 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [clients, plans, bookings]
   );
 
+  const getClientMonthlyUsage = useCallback(
+    (clientIdOrEmail: string, targetMonthOrDate?: string) => {
+      const normalizedQuery = (clientIdOrEmail || "").trim().toLowerCase();
+      if (!normalizedQuery) {
+        return { used: 0, total: 0, remaining: 0, planName: "", hasPlan: false };
+      }
+
+      const cleanPhone = (p: string) => (p || "").replace(/\D/g, "");
+      const queryDigits = cleanPhone(clientIdOrEmail);
+
+      const client = clients.find((c) => {
+        if (c.id === clientIdOrEmail) return true;
+        const cEmailNorm = (c.email || "").trim().toLowerCase();
+        if (cEmailNorm && cEmailNorm === normalizedQuery) return true;
+        const cPhoneDigits = cleanPhone(c.phone || "");
+        if (queryDigits.length >= 6 && cPhoneDigits.length >= 6) {
+          if (cPhoneDigits.endsWith(queryDigits) || queryDigits.endsWith(cPhoneDigits) || cPhoneDigits === queryDigits) {
+            return true;
+          }
+        }
+        const cNameNorm = (c.name || "").trim().toLowerCase();
+        if (cNameNorm && cNameNorm === normalizedQuery) return true;
+        return false;
+      });
+
+      if (!client) {
+        return { used: 0, total: 0, remaining: 0, planName: "", hasPlan: false };
+      }
+
+      let targetMonthKey: string;
+      if (targetMonthOrDate && targetMonthOrDate.length >= 7) {
+        targetMonthKey = targetMonthOrDate.slice(0, 7);
+      } else {
+        targetMonthKey = new Date().toISOString().slice(0, 7);
+      }
+
+      const plan = plans.find((p) => p.id === client.planId);
+      const totalAllowed = plan
+        ? (plan.classesPerMonth || plan.classesPerWeek * 4)
+        : ((client.planClassesPerWeek || 0) * 4);
+
+      const clientEmailNorm = (client.email || "").trim().toLowerCase();
+      const clientPhoneDigits = cleanPhone(client.phone || "");
+      const clientNameNorm = (client.name || "").trim().toLowerCase();
+
+      // Contar reservas activas del cliente en ese mes específico (IGNORANDO CANCELADAS)
+      const monthlyBookings = bookings.filter((b) => {
+        if (!b.shiftDate || b.status === "cancelled") return false;
+
+        const bEmailNorm = (b.clientEmail || "").trim().toLowerCase();
+        const bPhoneDigits = cleanPhone(b.clientPhone || "");
+        const bNameNorm = (b.clientName || "").trim().toLowerCase();
+
+        const matchEmail = Boolean(clientEmailNorm && bEmailNorm && bEmailNorm === clientEmailNorm);
+        const matchPhone = Boolean(
+          clientPhoneDigits.length >= 6 &&
+          bPhoneDigits.length >= 6 &&
+          (bPhoneDigits.endsWith(clientPhoneDigits) || clientPhoneDigits.endsWith(bPhoneDigits) || bPhoneDigits === clientPhoneDigits)
+        );
+        const matchName = Boolean(clientNameNorm && bNameNorm && bNameNorm === clientNameNorm);
+
+        if (!matchEmail && !matchPhone && !matchName) return false;
+        return b.shiftDate.startsWith(targetMonthKey);
+      });
+
+      // Sumar de weeklyUsageMap todas las semanas que pertenezcan a este mes
+      let weeklyMapSum = 0;
+      if (client.weeklyUsageMap) {
+        Object.entries(client.weeklyUsageMap).forEach(([mondayStr, count]) => {
+          if (typeof count === "number" && count > 0) {
+            if (mondayStr.startsWith(targetMonthKey)) {
+              weeklyMapSum += count;
+            } else {
+              try {
+                const mon = new Date(mondayStr + "T12:00:00");
+                const sun = new Date(mon);
+                sun.setDate(mon.getDate() + 6);
+                if (sun.toISOString().slice(0, 7) === targetMonthKey) {
+                  weeklyMapSum += count;
+                }
+              } catch {}
+            }
+          }
+        });
+      }
+
+      const explicitMonthly = client.monthlyUsageMap?.[targetMonthKey];
+      let used = explicitMonthly !== undefined
+        ? Math.max(explicitMonthly, monthlyBookings.length, weeklyMapSum)
+        : Math.max(monthlyBookings.length, weeklyMapSum);
+
+      const remaining = Math.max(0, totalAllowed - used);
+
+      return {
+        used,
+        total: totalAllowed,
+        remaining,
+        planName: plan ? plan.name : (client.planName || "Plan Asignado"),
+        hasPlan: Boolean(client.planId),
+      };
+    },
+    [clients, plans, bookings]
+  );
+
   const toggleClientWeeklyPayment = useCallback(async (clientId: string, mondayDateStr: string) => {
     setRawClients((prev) =>
       prev.map((c) => {
@@ -1925,17 +2088,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [rawClients]);
 
   const toggleClientMonthlyPayment = useCallback(async (clientId: string, monthKey: string) => {
+    let nextPaid = false;
+    let nextMonthly: Record<string, boolean> = {};
+    let lastPayDate: string | undefined;
+
     setRawClients((prev) =>
       prev.map((c) => {
         if (c.id !== clientId) return c;
         const currentMonthly = c.monthlyPayments || {};
-        const isPaid = !!currentMonthly[monthKey];
-        const nextMonthly = { ...currentMonthly, [monthKey]: !isPaid };
+        const isCurrentlyPaid = currentMonthly[monthKey] !== undefined
+          ? !!currentMonthly[monthKey]
+          : c.paymentStatus === "paid";
+        nextPaid = !isCurrentlyPaid;
+        nextMonthly = { ...currentMonthly, [monthKey]: nextPaid };
+        lastPayDate = nextPaid ? new Date().toISOString().split("T")[0] : c.lastPaymentDate;
         return {
           ...c,
           monthlyPayments: nextMonthly,
-          paymentStatus: !isPaid ? "paid" : "pending",
-          lastPaymentDate: !isPaid ? new Date().toISOString().split("T")[0] : c.lastPaymentDate,
+          paymentStatus: nextPaid ? "paid" : "pending",
+          lastPaymentDate: lastPayDate,
         };
       })
     );
@@ -1943,17 +2114,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const client = rawClients.find((c) => c.id === clientId);
     if (client) {
       const currentMonthly = client.monthlyPayments || {};
-      const isPaid = !currentMonthly[monthKey];
-      const nextMonthly = { ...currentMonthly, [monthKey]: isPaid };
+      const isCurrentlyPaid = currentMonthly[monthKey] !== undefined
+        ? !!currentMonthly[monthKey]
+        : client.paymentStatus === "paid";
+      const targetPaid = !isCurrentlyPaid;
+      const targetMonthly = { ...currentMonthly, [monthKey]: targetPaid };
+      const targetLastPayment = targetPaid ? new Date().toISOString().split("T")[0] : client.lastPaymentDate;
+
       const db = getFirebaseDb();
       if (db) {
         try {
           await setDoc(
             doc(db, "pilates_clients", clientId),
             {
-              monthlyPayments: nextMonthly,
-              paymentStatus: isPaid ? "paid" : "pending",
-              lastPaymentDate: isPaid ? new Date().toISOString().split("T")[0] : client.lastPaymentDate,
+              monthlyPayments: targetMonthly,
+              paymentStatus: targetPaid ? "paid" : "pending",
+              lastPaymentDate: targetLastPayment,
             },
             { merge: true }
           );
@@ -1965,13 +2141,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [rawClients]);
 
   const resetToMockData = useCallback(async () => {
-    // Vaciar todo en lugar de inyectar mock inventado
-    setShifts([]);
-    setBookings([]);
-    setInstructors([]);
-    setRawClients([]);
-    setEmailLogs([]);
-  }, []);
+    const seed = generateDynamicDemoData();
+    setShifts(seed.shifts);
+    setBookings(seed.bookings);
+    setInstructors(seed.instructors);
+    setRawClients(seed.clients);
+    setEmailLogs(seed.emailLogs);
+    setSettings(seed.settings);
+    setDisciplines(seed.disciplines);
+    setPlans(seed.plans);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "shifts", JSON.stringify(seed.shifts));
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "bookings", JSON.stringify(seed.bookings));
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "instructors", JSON.stringify(seed.instructors));
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "clients", JSON.stringify(seed.clients));
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "emails", JSON.stringify(seed.emailLogs));
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "settings", JSON.stringify(seed.settings));
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "disciplines", JSON.stringify(seed.disciplines));
+      localStorage.setItem(LOCAL_STORAGE_KEY_PREFIX + "plans", JSON.stringify(seed.plans));
+    } catch {}
+
+    showToast("Datos de demostración restablecidos con éxito.", "success");
+  }, [showToast]);
 
   return (
     <DataContext.Provider
@@ -2000,6 +2192,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         updatePlan,
         deletePlan,
         getClientWeeklyUsage,
+        getClientMonthlyUsage,
         toggleClientWeeklyPayment,
         toggleClientMonthlyPayment,
         addShift,

@@ -36,7 +36,11 @@ export default function SimuladorEmailsPage() {
     }
 
     if (!db) {
-      setFetchedLogs(fallbackEmailLogs);
+      let filtered = fallbackEmailLogs;
+      if (statusFilter !== "all") {
+        filtered = filtered.filter((e) => e.status === statusFilter);
+      }
+      setFetchedLogs(filtered.slice(0, displayLimit));
       setIsLoading(false);
       return;
     }

@@ -70,7 +70,15 @@ export default function TurnosPage() {
     }
 
     if (!db) {
-      setFetchedShifts(fallbackShifts);
+      let filtered = fallbackShifts;
+      if (selectedDate) {
+        filtered = filtered.filter((s) => s.date === selectedDate);
+      } else if (timeScope === "upcoming") {
+        filtered = filtered.filter((s) => s.date >= todayStr);
+      } else if (timeScope === "past") {
+        filtered = filtered.filter((s) => s.date < todayStr);
+      }
+      setFetchedShifts(filtered);
       setIsLoading(false);
       return;
     }

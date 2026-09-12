@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Client, Plan } from "@/types";
 import { useData } from "@/context/DataContext";
 import {
@@ -23,37 +23,102 @@ interface ClientPlanManagerTableProps {
 }
 
 export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: ClientPlanManagerTableProps) {
-  const { updateClient, getClientWeeklyUsage, toggleClientWeeklyPayment } = useData();
+  const { updateClient, getClientMonthlyUsage, toggleClientMonthlyPayment, settings } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPlanId, setFilterPlanId] = useState<string>("all");
   const [filterPayment, setFilterPayment] = useState<string>("all");
+  const [filterUsage, setFilterUsage] = useState<string>("all");
   const [paymentToConfirm, setPaymentToConfirm] = useState<{
     clientId: string;
     clientName: string;
-    mondayStr: string;
+    monthKey: string;
     currentlyPaid: boolean;
   } | null>(null);
 
-  const filteredClients = clients.filter((c) => {
-    if (
-      searchTerm &&
-      !c.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      !c.email.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      !c.phone.includes(searchTerm)
-    ) {
-      return false;
+  const filteredClients = useMemo(() => {
+    const result = clients.filter((c) => {
+      if (
+        searchTerm &&
+        !c.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !c.email.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !c.phone.includes(searchTerm)
+      ) {
+        return false;
+      }
+      if (filterPlanId === "with_plan" && !c.planId) return false;
+      if (filterPlanId === "no_plan" && c.planId) return false;
+      if (filterPlanId !== "all" && filterPlanId !== "with_plan" && filterPlanId !== "no_plan") {
+        if (c.planId !== filterPlanId) return false;
+      }
+      if (filterPayment !== "all") {
+        const now = new Date();
+        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const isPaid = Boolean(
+          c.monthlyPayments?.[currentMonthKey] !== undefined
+            ? c.monthlyPayments[currentMonthKey]
+            : c.paymentStatus === "paid"
+        );
+        const currentStatus = isPaid ? "paid" : "pending";
+        if (currentStatus !== filterPayment) return false;
+      }
+      if (filterUsage !== "all") {
+        const monthlyUsage = getClientMonthlyUsage(c.id);
+        const hasPlan = Boolean(c.planId || monthlyUsage.hasPlan);
+        if (!hasPlan || monthlyUsage.total === 0) return false;
+
+        if (filterUsage === "under_used") {
+          // Clientas que no hayan agotado su cupo mensual (quedan clases pendientes)
+          if (monthlyUsage.used >= monthlyUsage.total) {
+            return false;
+          }
+        } else if (filterUsage === "low_used") {
+          // Bajo consumo: usaron menos de la mitad del plan
+          if (monthlyUsage.used >= Math.ceil(monthlyUsage.total / 2)) {
+            return false;
+          }
+        } else if (filterUsage === "zero_used") {
+          // Sin ninguna clase usada este mes
+          if (monthlyUsage.used > 0) {
+            return false;
+          }
+        } else if (filterUsage === "completed") {
+          if (monthlyUsage.used !== monthlyUsage.total) {
+            return false;
+          }
+        } else if (filterUsage === "exceeded") {
+          if (monthlyUsage.used <= monthlyUsage.total) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+
+    // Ordenar de menor a mayor consumo cuando se filtra por clases
+    if (filterUsage === "under_used" || filterUsage === "low_used" || filterUsage === "zero_used") {
+      result.sort((a, b) => {
+        const uA = getClientMonthlyUsage(a.id);
+        const uB = getClientMonthlyUsage(b.id);
+        // 1. Menos clases usadas primero (0, 1, 2, 3...)
+        if (uA.used !== uB.used) {
+          return uA.used - uB.used;
+        }
+        // 2. A igual cantidad de clases usadas, la que tiene más clases pendientes primero
+        if (uB.remaining !== uA.remaining) {
+          return uB.remaining - uA.remaining;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    } else if (filterUsage === "completed" || filterUsage === "exceeded") {
+      result.sort((a, b) => {
+        const uA = getClientMonthlyUsage(a.id);
+        const uB = getClientMonthlyUsage(b.id);
+        return uB.used - uA.used;
+      });
     }
-    if (filterPlanId === "with_plan" && !c.planId) return false;
-    if (filterPlanId === "no_plan" && c.planId) return false;
-    if (filterPlanId !== "all" && filterPlanId !== "with_plan" && filterPlanId !== "no_plan") {
-      if (c.planId !== filterPlanId) return false;
-    }
-    if (filterPayment !== "all") {
-      const currentStatus = c.paymentStatus || "pending";
-      if (currentStatus !== filterPayment) return false;
-    }
-    return true;
-  });
+
+    return result;
+  }, [clients, searchTerm, filterPlanId, filterPayment, filterUsage, getClientMonthlyUsage]);
 
   const handlePlanChange = async (client: Client, newPlanId: string) => {
     const selectedPlan = plans.find((p) => p.id === newPlanId);
@@ -98,6 +163,32 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
     });
   };
 
+  const getPlanWhatsappUrl = (
+    client: Client,
+    remaining: number,
+    total: number,
+    used: number,
+    isExceeded: boolean
+  ) => {
+    const phoneDigits = (client.phone || "").replace(/\D/g, "");
+    if (!phoneDigits) return null;
+    const fullPhone = phoneDigits.startsWith("54") ? phoneDigits : `549${phoneDigits}`;
+
+    const studio = settings?.studioName || "Demo Pilates";
+    let message = "";
+    if (remaining === 1) {
+      message = `¡Hola ${client.name}! Te escribimos de ${studio} para recordarte que te queda 1 clase disponible de tu plan de este mes. ¡Te esperamos! ✨`;
+    } else if (remaining > 1) {
+      message = `¡Hola ${client.name}! Te escribimos de ${studio} para recordarte que te quedan ${remaining} clases disponibles de tu plan de este mes. ¡Te esperamos! ✨`;
+    } else if (isExceeded) {
+      message = `¡Hola ${client.name}! Te escribimos de ${studio} para avisarte que ya utilizaste ${used} clases de las ${total} de tu plan de este mes.`;
+    } else {
+      message = `¡Hola ${client.name}! Te escribimos de ${studio} para comentarte que ya completaste las ${total} clases de tu plan de este mes. ¡Muchas gracias! ✨`;
+    }
+
+    return `whatsapp://send?phone=${fullPhone}&text=${encodeURIComponent(message)}`;
+  };
+
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
       {/* Top Filter Bar */}
@@ -108,7 +199,7 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
             <span>Seguimiento de Clientas y Planes</span>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Control de turnos utilizados esta semana, aranceles ajustados y estado de pago
+            Control de turnos utilizados este mes, aranceles ajustados y estado de pago
           </p>
         </div>
 
@@ -148,11 +239,45 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
             className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300"
           >
             <option value="all">Todos los Pagos</option>
-            <option value="paid">Pagados</option>
-            <option value="pending">Pendientes de Pago</option>
+            <option value="paid">Mes pagado</option>
+            <option value="pending">Mes pendiente</option>
+          </select>
+
+          {/* Usage Filter */}
+          <select
+            value={filterUsage}
+            onChange={(e) => setFilterUsage(e.target.value)}
+            className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
+          >
+            <option value="all">Todos los consumos</option>
+            <option value="under_used">Menos clases de su plan (menor a mayor)</option>
+            <option value="low_used">Bajo consumo (menos de la mitad)</option>
+            <option value="zero_used">Sin clases usadas (0 turnos este mes)</option>
+            <option value="completed">Cupo completo del mes</option>
+            <option value="exceeded">Excedieron su plan</option>
           </select>
         </div>
       </div>
+
+      {/* Info indicator when filtering */}
+      {filterUsage !== "all" && (
+        <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 font-bold">
+          <span>
+            {filterUsage === "under_used" && `Mostrando ${filteredClients.length} clientas con clases pendientes (ordenadas de menor a mayor consumo: 0, 1, 2...)`}
+            {filterUsage === "low_used" && `Mostrando ${filteredClients.length} clientas con bajo consumo (usaron menos del 50% de su plan)`}
+            {filterUsage === "zero_used" && `Mostrando ${filteredClients.length} clientas sin turnos registrados este mes`}
+            {filterUsage === "completed" && `Mostrando ${filteredClients.length} clientas que completaron su cupo exacto`}
+            {filterUsage === "exceeded" && `Mostrando ${filteredClients.length} clientas que excedieron su cupo de clases`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setFilterUsage("all")}
+            className="text-[11px] underline font-semibold hover:text-indigo-900 dark:hover:text-indigo-100 cursor-pointer ml-2 shrink-0"
+          >
+            Ver todas
+          </button>
+        </div>
+      )}
 
       {/* Mobile Card List (< lg) */}
       <div className="block lg:hidden space-y-3">
@@ -163,15 +288,17 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
         ) : (
           filteredClients.map((client) => {
             const assignedPlan = plans.find((p) => p.id === client.planId);
-            const weeklyUsage = getClientWeeklyUsage(client.id);
+            const monthlyUsage = getClientMonthlyUsage(client.id);
             const activePrice = client.customPrice !== undefined ? client.customPrice : assignedPlan?.price || 0;
             const now = new Date();
-            const currentMonday = new Date(now);
-            const day = currentMonday.getDay();
-            const diff = currentMonday.getDate() - day + (day === 0 ? -6 : 1);
-            currentMonday.setDate(diff);
-            const currentMondayStr = currentMonday.toISOString().split("T")[0];
-            const isWeekPaid = Boolean(client.weeklyPayments && client.weeklyPayments[currentMondayStr]);
+            const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+            const isMonthPaid = Boolean(
+              client.monthlyPayments?.[currentMonthKey] !== undefined
+                ? client.monthlyPayments[currentMonthKey]
+                : client.paymentStatus === "paid"
+            );
+            const isComplete = monthlyUsage.total > 0 && monthlyUsage.used === monthlyUsage.total;
+            const isExceeded = monthlyUsage.total > 0 && monthlyUsage.used > monthlyUsage.total;
 
             return (
               <div
@@ -216,25 +343,25 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
                       setPaymentToConfirm({
                         clientId: client.id,
                         clientName: client.name,
-                        mondayStr: currentMondayStr,
-                        currentlyPaid: isWeekPaid,
+                        monthKey: currentMonthKey,
+                        currentlyPaid: isMonthPaid,
                       })
                     }
-                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1.5 transition-all shrink-0 ${
-                      isWeekPaid
+                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1.5 transition-all shrink-0 cursor-pointer ${
+                      isMonthPaid
                         ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
                         : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30"
                     }`}
                   >
-                    {isWeekPaid ? (
+                    {isMonthPaid ? (
                       <>
                         <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                        <span>Pagado</span>
+                        <span>Mes pagado</span>
                       </>
                     ) : (
                       <>
                         <AlertCircle className="w-3 h-3 text-amber-500" />
-                        <span>Pendiente</span>
+                        <span>Mes pendiente</span>
                       </>
                     )}
                   </button>
@@ -301,37 +428,79 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
                   )}
                 </div>
 
-                {/* Weekly Usage Progress */}
+                {/* Monthly Usage Progress */}
                 {client.planId && (
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
-                    <div className="flex items-center justify-between text-[11px] font-bold">
-                      <span
-                        className={
-                          weeklyUsage.remaining === 0
-                            ? "text-rose-600 dark:text-rose-400"
-                            : "text-indigo-600 dark:text-indigo-400"
-                        }
-                      >
-                        {weeklyUsage.used} de {weeklyUsage.total} turnos usados esta semana
-                      </span>
-                      <span className="text-slate-400 text-[10px]">
-                        {weeklyUsage.remaining} disp.
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          weeklyUsage.remaining === 0
-                            ? "bg-rose-500"
-                            : "bg-indigo-600"
-                        }`}
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            (weeklyUsage.used / (weeklyUsage.total || 1)) * 100
-                          )}%`,
-                        }}
-                      />
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold">
+                          <span
+                            className={
+                              isExceeded
+                                ? "text-rose-600 dark:text-rose-400"
+                                : isComplete
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-indigo-600 dark:text-indigo-400"
+                            }
+                          >
+                            {monthlyUsage.used} de {monthlyUsage.total} turnos usados este mes
+                          </span>
+                          <span
+                            className={
+                              isExceeded
+                                ? "text-rose-600 dark:text-rose-400 text-[10px]"
+                                : isComplete
+                                ? "text-emerald-600 dark:text-emerald-400 text-[10px]"
+                                : "text-slate-400 text-[10px]"
+                            }
+                          >
+                            {isExceeded
+                              ? "Excedido"
+                              : isComplete
+                              ? "Completo"
+                              : `${monthlyUsage.remaining} disp.`}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              isExceeded
+                                ? "bg-rose-500"
+                                : isComplete
+                                ? "bg-emerald-500"
+                                : "bg-indigo-600"
+                            }`}
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                (monthlyUsage.used / (monthlyUsage.total || 1)) * 100
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botón WhatsApp de aviso de clases restantes */}
+                      {(() => {
+                        const waUrl = getPlanWhatsappUrl(
+                          client,
+                          monthlyUsage.remaining,
+                          monthlyUsage.total,
+                          monthlyUsage.used,
+                          isExceeded
+                        );
+                        if (!waUrl) return null;
+                        return (
+                          <a
+                            href={waUrl}
+                            className="px-2 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-[10px] font-bold inline-flex items-center gap-1 shrink-0 transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title={`Avisar por WhatsApp: le quedan ${monthlyUsage.remaining} clases de su plan este mes`}
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>Avisar</span>
+                          </a>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -341,7 +510,7 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
                   <button
                     type="button"
                     onClick={() => onOpenClientHistory && onOpenClientHistory(client)}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold cursor-pointer"
                   >
                     Ver historial completo de semanas →
                   </button>
@@ -359,8 +528,8 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
             <tr>
               <th className="p-3.5">Clienta</th>
               <th className="p-3.5">Plan Asignado</th>
-              <th className="p-3.5">Arancel Semanal/Mensual</th>
-              <th className="p-3.5">Turnos Esta Semana</th>
+              <th className="p-3.5">Arancel Mensual</th>
+              <th className="p-3.5">Turnos Este Mes</th>
               <th className="p-3.5 text-center">Estado de Pago</th>
             </tr>
           </thead>
@@ -374,8 +543,16 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
             ) : (
               filteredClients.map((client) => {
                 const assignedPlan = plans.find((p) => p.id === client.planId);
-                const weeklyUsage = getClientWeeklyUsage(client.id);
-                const isPaid = client.paymentStatus === "paid";
+                const monthlyUsage = getClientMonthlyUsage(client.id);
+                const now = new Date();
+                const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+                const isMonthPaid = Boolean(
+                  client.monthlyPayments?.[currentMonthKey] !== undefined
+                    ? client.monthlyPayments[currentMonthKey]
+                    : client.paymentStatus === "paid"
+                );
+                const isComplete = monthlyUsage.total > 0 && monthlyUsage.used === monthlyUsage.total;
+                const isExceeded = monthlyUsage.total > 0 && monthlyUsage.used > monthlyUsage.total;
 
                 return (
                   <tr
@@ -478,39 +655,87 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
                       )}
                     </td>
 
-                    {/* Weekly Shifts Usage Progress */}
+                    {/* Monthly Shifts Usage Progress */}
                     <td className="p-3.5">
                       {client.planId ? (
-                        <div className="space-y-1 max-w-[170px]">
-                          <div className="flex items-center justify-between text-[11px] font-bold">
-                            <span
-                              className={
-                                weeklyUsage.remaining === 0
-                                  ? "text-rose-600 dark:text-rose-400"
-                                  : "text-indigo-600 dark:text-indigo-400"
-                              }
-                            >
-                              {weeklyUsage.used} de {weeklyUsage.total} usados
-                            </span>
-                            <span className="text-slate-400 text-[10px]">
-                              {weeklyUsage.remaining} disp.
-                            </span>
+                        <div className="flex items-center gap-2.5">
+                          <div className="space-y-1 min-w-[140px] max-w-[175px] flex-1">
+                            <div className="flex items-center justify-between text-[11px] font-bold">
+                              <span
+                                className={
+                                  isExceeded
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : isComplete
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-indigo-600 dark:text-indigo-400"
+                                }
+                              >
+                                {monthlyUsage.used} de {monthlyUsage.total} usados este mes
+                              </span>
+                              <span
+                                className={
+                                  isExceeded
+                                    ? "text-rose-600 dark:text-rose-400 text-[10px]"
+                                    : isComplete
+                                    ? "text-emerald-600 dark:text-emerald-400 text-[10px]"
+                                    : "text-slate-400 text-[10px]"
+                                }
+                              >
+                                {isExceeded
+                                  ? "Excedido"
+                                  : isComplete
+                                  ? "Completo"
+                                  : `${monthlyUsage.remaining} disp.`}
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  isExceeded
+                                    ? "bg-rose-500"
+                                    : isComplete
+                                    ? "bg-emerald-500"
+                                    : "bg-indigo-600"
+                                }`}
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    (monthlyUsage.used / (monthlyUsage.total || 1)) * 100
+                                  )}%`,
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                weeklyUsage.remaining === 0
-                                  ? "bg-rose-500"
-                                  : "bg-indigo-600"
-                              }`}
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  (weeklyUsage.used / (weeklyUsage.total || 1)) * 100
-                                )}%`,
-                              }}
-                            />
-                          </div>
+
+                          {/* Botón WhatsApp de aviso de clases restantes */}
+                          {(() => {
+                            const waUrl = getPlanWhatsappUrl(
+                              client,
+                              monthlyUsage.remaining,
+                              monthlyUsage.total,
+                              monthlyUsage.used,
+                              isExceeded
+                            );
+                            if (!waUrl) {
+                              return (
+                                <span
+                                  className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed shrink-0"
+                                  title="Sin teléfono para WhatsApp"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                </span>
+                              );
+                            }
+                            return (
+                              <a
+                                href={waUrl}
+                                className="p-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-2xs hover:scale-105"
+                                title={`Avisar por WhatsApp: le quedan ${monthlyUsage.remaining} clases de su plan este mes`}
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                              </a>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <span className="text-slate-400 text-[11px] italic">
@@ -519,66 +744,35 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
                       )}
                     </td>
 
-                    {/* Weekly Payment Status Toggle */}
+                    {/* Monthly Payment Status Toggle */}
                     <td className="p-3.5 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <button
                           type="button"
                           onClick={() => {
-                            const now = new Date();
-                            const currentMonday = new Date(now);
-                            const day = currentMonday.getDay();
-                            const diff = currentMonday.getDate() - day + (day === 0 ? -6 : 1);
-                            currentMonday.setDate(diff);
-                            const currentMondayStr = currentMonday.toISOString().split("T")[0];
-                            const isPaid = Boolean(client.weeklyPayments && client.weeklyPayments[currentMondayStr]);
                             setPaymentToConfirm({
                               clientId: client.id,
                               clientName: client.name,
-                              mondayStr: currentMondayStr,
-                              currentlyPaid: isPaid,
+                              monthKey: currentMonthKey,
+                              currentlyPaid: isMonthPaid,
                             });
                           }}
-                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 ${
-                            Boolean(
-                              client.weeklyPayments &&
-                              client.weeklyPayments[
-                                (() => {
-                                  const now = new Date();
-                                  const currentMonday = new Date(now);
-                                  const day = currentMonday.getDay();
-                                  const diff = currentMonday.getDate() - day + (day === 0 ? -6 : 1);
-                                  currentMonday.setDate(diff);
-                                  return currentMonday.toISOString().split("T")[0];
-                                })()
-                              ]
-                            )
+                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer ${
+                            isMonthPaid
                               ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20"
                               : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20"
                           }`}
-                          title="Toca para marcar o desmarcar el pago de esta semana"
+                          title="Toca para marcar o desmarcar el pago de este mes"
                         >
-                          {Boolean(
-                            client.weeklyPayments &&
-                            client.weeklyPayments[
-                              (() => {
-                                const now = new Date();
-                                const currentMonday = new Date(now);
-                                const day = currentMonday.getDay();
-                                const diff = currentMonday.getDate() - day + (day === 0 ? -6 : 1);
-                                currentMonday.setDate(diff);
-                                return currentMonday.toISOString().split("T")[0];
-                              })()
-                            ]
-                          ) ? (
+                          {isMonthPaid ? (
                             <>
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                              <span>✓ Sem. Pagada</span>
+                              <span>Mes pagado</span>
                             </>
                           ) : (
                             <>
                               <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                              <span>⏳ Sem. Pendiente</span>
+                              <span>Mes pendiente</span>
                             </>
                           )}
                         </button>
@@ -586,9 +780,9 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
                         <button
                           type="button"
                           onClick={() => onOpenClientHistory && onOpenClientHistory(client)}
-                          className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
+                          className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
                         >
-                          Ver todas las semanas
+                          Ver historial de turnos
                         </button>
                       </div>
                     </td>
@@ -600,19 +794,19 @@ export function ClientPlanManagerTable({ clients, plans, onOpenClientHistory }: 
         </table>
       </div>
 
-      {/* Confirmation Modal for Weekly Payment status toggle */}
+      {/* Confirmation Modal for Monthly Payment status toggle */}
       <ConfirmModal
         isOpen={!!paymentToConfirm}
-        title={paymentToConfirm?.currentlyPaid ? "Desmarcar Pago de la Semana" : "Confirmar Cobro de la Semana"}
+        title={paymentToConfirm?.currentlyPaid ? "Desmarcar Pago del Mes" : "Confirmar Cobro del Mes"}
         message={
           paymentToConfirm?.currentlyPaid
-            ? `¿Deseas marcar la semana actual de ${paymentToConfirm?.clientName} como PENDIENTE de pago?`
-            : `¿Deseas registrar el cobro y marcar la semana actual de ${paymentToConfirm?.clientName} como PAGADA?`
+            ? `¿Deseas marcar el mes actual de ${paymentToConfirm?.clientName} como PENDIENTE de pago?`
+            : `¿Deseas registrar el cobro y marcar el mes actual de ${paymentToConfirm?.clientName} como PAGADO?`
         }
         confirmText={paymentToConfirm?.currentlyPaid ? "Sí, Marcar Pendiente" : "Sí, Marcar Pagada"}
         onConfirm={async () => {
           if (paymentToConfirm) {
-            await toggleClientWeeklyPayment(paymentToConfirm.clientId, paymentToConfirm.mondayStr);
+            await toggleClientMonthlyPayment(paymentToConfirm.clientId, paymentToConfirm.monthKey);
             setPaymentToConfirm(null);
           }
         }}

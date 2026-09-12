@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Client, Booking, Plan } from "@/types";
 import { useData } from "@/context/DataContext";
 import { getFirebaseDb } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 import { DisciplineBadge } from "@/components/common/DisciplineBadge";
 import {
   X,
@@ -15,6 +15,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   DollarSign,
   User,
   Phone,
@@ -27,8 +29,11 @@ import {
   List,
   Loader2,
   Trash2,
+  MessageCircle,
+  Repeat,
 } from "lucide-react";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
+import { ClientFixedBookingTab } from "./ClientFixedBookingTab";
 
 interface ClientHistoryModalProps {
   isOpen: boolean;
@@ -36,86 +41,55 @@ interface ClientHistoryModalProps {
   client: Client | null;
 }
 
-function getMondayFromDateStr(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d.toISOString().split("T")[0];
+function formatBookingDate(dateStr: string): { dayNumber: string; dayName: string; monthName: string; full: string } {
+  try {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d, 12, 0, 0);
+    const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const months = [
+      "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    ];
+    return {
+      dayNumber: String(d),
+      dayName: days[date.getDay()],
+      monthName: months[m - 1],
+      full: `${days[date.getDay()]} ${d} de ${months[m - 1]}`,
+    };
+  } catch {
+    return { dayNumber: "", dayName: "", monthName: "", full: dateStr };
+  }
 }
 
-function formatWeekRange(mondayStr: string): string {
-  const monday = new Date(mondayStr + "T12:00:00");
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-
+function formatMonthYearHeader(monthStr: string): string {
+  const [year, month] = monthStr.split("-").map(Number);
   const months = [
-    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
-
-  return `${monday.getDate()} ${months[monday.getMonth()]} - ${sunday.getDate()} ${months[sunday.getMonth()]} ${sunday.getFullYear()}`;
+  return `${months[month - 1]} ${year}`;
 }
 
 export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryModalProps) {
-  const { bookings: fallbackBookings, plans, updateClient, deleteClient, toggleClientWeeklyPayment } = useData();
-  const [activeTab, setActiveTab] = useState<"weeks" | "all" | "settings">("weeks");
-  const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
+  const { bookings: fallbackBookings, plans, updateClient, deleteClient, getClientMonthlyUsage, settings } = useData();
+  const [activeTab, setActiveTab] = useState<"month" | "fixed" | "all" | "settings">("month");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [weekPaymentToConfirm, setWeekPaymentToConfirm] = useState<{
-    mondayStr: string;
-    rangeLabel: string;
-    isPaid: boolean;
-  } | null>(null);
 
-  // Firestore on-demand state for this client
-  const [fetchedBookings, setFetchedBookings] = useState<Booking[]>([]);
-  const [loadingBookings, setLoadingBookings] = useState<boolean>(false);
+  // Monthly bookings state
+  const [monthBookings, setMonthBookings] = useState<Booking[]>([]);
+  const [loadingMonthBookings, setLoadingMonthBookings] = useState<boolean>(false);
+  const [refreshMonthKey, setRefreshMonthKey] = useState<number>(0);
 
-  useEffect(() => {
-    if (!isOpen || !client) {
-      setFetchedBookings([]);
-      return;
-    }
+  const loadMonthlyBookings = () => {
+    setRefreshMonthKey((k) => k + 1);
+  };
 
-    let isMounted = true;
-    const db = getFirebaseDb();
-    if (!db) return;
-
-    setLoadingBookings(true);
-
-    let q;
-    if (client.email) {
-      q = query(collection(db, "pilates_bookings"), where("clientEmail", "==", client.email));
-    } else if (client.phone) {
-      q = query(collection(db, "pilates_bookings"), where("clientPhone", "==", client.phone));
-    } else {
-      q = query(collection(db, "pilates_bookings"), where("clientName", "==", client.name));
-    }
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snap) => {
-        if (!isMounted) return;
-        const loaded = snap.docs
-          .map((d) => d.data() as Booking)
-          .filter((b) => b && b.id && !b.id.startsWith("_"));
-        setFetchedBookings(loaded);
-        setLoadingBookings(false);
-      },
-      (err) => {
-        console.warn("Error fetching client bookings on demand:", err);
-        if (isMounted) setLoadingBookings(false);
-      }
-    );
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [isOpen, client]);
-
+  // History state: only latest 10 (with option to load more)
+  const [historyBookings, setHistoryBookings] = useState<Booking[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+  const [historyLimit, setHistoryLimit] = useState<number>(10);
+  const [hasMoreHistory, setHasMoreHistory] = useState<boolean>(false);
   // Form states for quick client settings
   const [hasCustomPrice, setHasCustomPrice] = useState(
     client?.customPrice !== undefined && client?.customPrice !== null
@@ -127,7 +101,7 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
   const [planId, setPlanId] = useState(client?.planId || "");
   const [savingSettings, setSavingSettings] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (client) {
       setCustomPrice(client.customPrice);
       setHasCustomPrice(client.customPrice !== undefined && client.customPrice !== null);
@@ -136,45 +110,282 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
     }
   }, [client]);
 
-  // Todas las reservas del cliente
-  const clientBookings = useMemo(() => {
-    if (!client) return [];
-    const sourceBookings = fetchedBookings.length > 0 || loadingBookings ? fetchedBookings : fallbackBookings;
-    return sourceBookings.filter((b) => {
-      const matchesEmail = Boolean(client.email && b.clientEmail && b.clientEmail.toLowerCase() === client.email.toLowerCase());
-      const matchesPhone = Boolean(client.phone && b.clientPhone && b.clientPhone === client.phone);
-      const matchesName = Boolean(b.clientName && b.clientName.toLowerCase() === client.name.toLowerCase());
-      return matchesEmail || matchesPhone || matchesName;
-    }).sort((a, b) => (b.shiftDate + b.shiftTime).localeCompare(a.shiftDate + a.shiftTime));
-  }, [fetchedBookings, loadingBookings, fallbackBookings, client]);
+  // Selected month state for "Semana a semana" (always defaults to current month)
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const currentMonthStr = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
-  // Agrupación por semana (Lunes a Domingo) calculada incondicionalmente
-  const bookingsByWeek = useMemo(() => {
-    if (!client) return [];
-    const map: Record<string, Booking[]> = {};
+  const handlePrevMonth = () => {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const prevDate = new Date(year, month - 2, 1, 12, 0, 0);
+    const prevStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+    setSelectedMonth(prevStr);
+  };
 
-    clientBookings.forEach((b) => {
-      const mondayStr = getMondayFromDateStr(b.shiftDate);
-      if (!map[mondayStr]) map[mondayStr] = [];
-      map[mondayStr].push(b);
-    });
+  const handleNextMonth = () => {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const nextDate = new Date(year, month, 1, 12, 0, 0);
+    const nextStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}`;
+    setSelectedMonth(nextStr);
+  };
 
-    // Ordenar semanas de más reciente a más antigua
-    const sortedWeeks = Object.keys(map).sort((a, b) => b.localeCompare(a));
-    return sortedWeeks.map((mondayStr) => {
-      const weekBookings = map[mondayStr].sort((a, b) => (a.shiftDate + a.shiftTime).localeCompare(b.shiftDate + b.shiftTime));
-      const activeBookings = weekBookings.filter((b) => b.status !== "cancelled");
-      const isPaid = Boolean(client.weeklyPayments && client.weeklyPayments[mondayStr]);
+  const handleCurrentMonth = () => {
+    setSelectedMonth(new Date().toISOString().slice(0, 7));
+  };
 
-      return {
-        mondayStr,
-        rangeLabel: formatWeekRange(mondayStr),
-        bookings: weekBookings,
-        activeCount: activeBookings.length,
-        isPaid,
-      };
-    });
-  }, [clientBookings, client]);
+  // Clear states when modal closes or client changes
+  useEffect(() => {
+    if (!isOpen || !client) {
+      setMonthBookings([]);
+      setLoadingMonthBookings(false);
+      setHistoryBookings([]);
+      setLoadingHistory(false);
+      setHistoryLimit(10);
+      setHasMoreHistory(false);
+      setSelectedMonth(new Date().toISOString().slice(0, 7));
+    }
+  }, [isOpen, client]);
+
+  // Load history bookings on-demand only when "all" (Historial) tab is active
+  useEffect(() => {
+    if (!isOpen || !client || activeTab !== "all") return;
+
+    let isMounted = true;
+    const db = getFirebaseDb();
+    if (!db) {
+      const clientEmailNorm = (client.email || "").trim().toLowerCase();
+      const cleanPhone = (p: string) => (p || "").replace(/\D/g, "");
+      const clientPhoneDigits = cleanPhone(client.phone || "");
+      const clientNameNorm = (client.name || "").trim().toLowerCase();
+
+      const matched = fallbackBookings
+        .filter((b) => {
+          if (!b || !b.id || b.id.startsWith("_")) return false;
+          const bEmailNorm = (b.clientEmail || "").trim().toLowerCase();
+          const bPhoneDigits = cleanPhone(b.clientPhone || "");
+          const bNameNorm = (b.clientName || "").trim().toLowerCase();
+
+          const matchEmail = Boolean(clientEmailNorm && bEmailNorm && bEmailNorm === clientEmailNorm);
+          const matchPhone = Boolean(
+            clientPhoneDigits.length >= 6 &&
+            bPhoneDigits.length >= 6 &&
+            (bPhoneDigits.endsWith(clientPhoneDigits) || clientPhoneDigits.endsWith(bPhoneDigits) || bPhoneDigits === clientPhoneDigits)
+          );
+          const matchName = Boolean(clientNameNorm && bNameNorm && bNameNorm === clientNameNorm);
+          return matchEmail || matchPhone || matchName;
+        })
+        .sort((a, b) => (b.shiftDate || "").localeCompare(a.shiftDate || ""));
+
+      if (matched.length > historyLimit) {
+        setHasMoreHistory(true);
+        setHistoryBookings(matched.slice(0, historyLimit));
+      } else {
+        setHasMoreHistory(false);
+        setHistoryBookings(matched);
+      }
+      setLoadingHistory(false);
+      return;
+    }
+
+    setLoadingHistory(true);
+
+    const fetchHistory = async () => {
+      try {
+        let q;
+        if (client.email) {
+          q = query(
+            collection(db, "pilates_bookings"),
+            where("clientEmail", "==", client.email),
+            orderBy("shiftDate", "desc"),
+            limit(historyLimit + 1)
+          );
+        } else if (client.phone) {
+          q = query(
+            collection(db, "pilates_bookings"),
+            where("clientPhone", "==", client.phone),
+            orderBy("shiftDate", "desc"),
+            limit(historyLimit + 1)
+          );
+        } else {
+          q = query(
+            collection(db, "pilates_bookings"),
+            where("clientName", "==", client.name),
+            orderBy("shiftDate", "desc"),
+            limit(historyLimit + 1)
+          );
+        }
+
+        const snap = await getDocs(q);
+        if (!isMounted) return;
+
+        const loaded = snap.docs
+          .map((d) => d.data() as Booking)
+          .filter((b) => b && b.id && !b.id.startsWith("_"));
+
+        if (loaded.length > historyLimit) {
+          setHasMoreHistory(true);
+          setHistoryBookings(loaded.slice(0, historyLimit));
+        } else {
+          setHasMoreHistory(false);
+          setHistoryBookings(loaded);
+        }
+      } catch (err: any) {
+        console.warn("Error fetching history with composite index, using fallback:", err);
+        try {
+          let fallbackQ;
+          if (client.email) {
+            fallbackQ = query(collection(db, "pilates_bookings"), where("clientEmail", "==", client.email));
+          } else if (client.phone) {
+            fallbackQ = query(collection(db, "pilates_bookings"), where("clientPhone", "==", client.phone));
+          } else {
+            fallbackQ = query(collection(db, "pilates_bookings"), where("clientName", "==", client.name));
+          }
+
+          const snap = await getDocs(fallbackQ);
+          if (!isMounted) return;
+
+          const loaded = snap.docs
+            .map((d) => d.data() as Booking)
+            .filter((b) => b && b.id && !b.id.startsWith("_"))
+            .sort((a, b) => (b.shiftDate + b.shiftTime).localeCompare(a.shiftDate + a.shiftTime));
+
+          if (loaded.length > historyLimit) {
+            setHasMoreHistory(true);
+            setHistoryBookings(loaded.slice(0, historyLimit));
+          } else {
+            setHasMoreHistory(false);
+            setHistoryBookings(loaded);
+          }
+        } catch (fallbackErr) {
+          console.error("Error in fallback history fetch:", fallbackErr);
+        }
+      } finally {
+        if (isMounted) setLoadingHistory(false);
+      }
+    };
+
+    fetchHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, client, activeTab, historyLimit]);
+
+  // Fetch bookings for the selected month
+  useEffect(() => {
+    if (!isOpen || !client) return;
+
+    let isMounted = true;
+    const db = getFirebaseDb();
+    setLoadingMonthBookings(true);
+
+    const fetchMonthBookings = async () => {
+      try {
+        const clientEmailNorm = (client.email || "").trim().toLowerCase();
+        const cleanPhone = (p: string) => (p || "").replace(/\D/g, "");
+        const clientPhoneDigits = cleanPhone(client.phone || "");
+        const clientNameNorm = (client.name || "").trim().toLowerCase();
+
+        let loaded: Booking[] = [];
+
+        if (db) {
+          try {
+            let snap;
+            if (client.email) {
+              snap = await getDocs(query(collection(db, "pilates_bookings"), where("clientEmail", "==", client.email)));
+            } else if (client.phone) {
+              snap = await getDocs(query(collection(db, "pilates_bookings"), where("clientPhone", "==", client.phone)));
+            } else {
+              snap = await getDocs(query(collection(db, "pilates_bookings"), where("clientName", "==", client.name)));
+            }
+            if (snap) {
+              loaded = snap.docs
+                .map((d) => d.data() as Booking)
+                .filter((b) => b && b.id && !b.id.startsWith("_"));
+            }
+          } catch (err) {
+            console.warn("Direct month bookings query warning:", err);
+          }
+        }
+
+        // Combinar con las reservas en tiempo real de DataContext sin duplicados
+        const allCandidates = [...loaded, ...fallbackBookings];
+        const uniqueMap = new Map<string, Booking>();
+        allCandidates.forEach((b) => {
+          if (b && b.id && !b.id.startsWith("_")) {
+            uniqueMap.set(b.id, b);
+          }
+        });
+
+        const combined = Array.from(uniqueMap.values())
+          .filter((b) => {
+            if (!b.shiftDate || !b.shiftDate.startsWith(selectedMonth)) return false;
+
+            const bEmailNorm = (b.clientEmail || "").trim().toLowerCase();
+            const bPhoneDigits = cleanPhone(b.clientPhone || "");
+            const bNameNorm = (b.clientName || "").trim().toLowerCase();
+
+            const matchEmail = Boolean(clientEmailNorm && bEmailNorm && bEmailNorm === clientEmailNorm);
+            const matchPhone = Boolean(
+              clientPhoneDigits.length >= 6 &&
+              bPhoneDigits.length >= 6 &&
+              (bPhoneDigits.endsWith(clientPhoneDigits) || clientPhoneDigits.endsWith(bPhoneDigits) || bPhoneDigits === clientPhoneDigits)
+            );
+            const matchName = Boolean(clientNameNorm && bNameNorm && bNameNorm === clientNameNorm);
+
+            return matchEmail || matchPhone || matchName;
+          })
+          .sort((a, b) => (a.shiftDate + a.shiftTime).localeCompare(b.shiftDate + b.shiftTime));
+
+        if (isMounted) {
+          setMonthBookings(combined);
+        }
+      } catch (err) {
+        console.error("Error fetching month bookings:", err);
+        if (isMounted) setMonthBookings([]);
+      } finally {
+        if (isMounted) setLoadingMonthBookings(false);
+      }
+    };
+
+    fetchMonthBookings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, client, selectedMonth, fallbackBookings, refreshMonthKey]);
+
+  // Lista de meses disponibles para el selector rápido
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    monthsSet.add(currentMonth);
+
+    if (client?.monthlyPayments) {
+      Object.keys(client.monthlyPayments).forEach((monthKey) => {
+        monthsSet.add(monthKey);
+      });
+    }
+
+    if (client?.monthlyUsageMap) {
+      Object.keys(client.monthlyUsageMap).forEach((monthKey) => {
+        monthsSet.add(monthKey);
+      });
+    }
+
+    if (client?.weeklyUsageMap) {
+      Object.keys(client.weeklyUsageMap).forEach((mondayStr) => {
+        monthsSet.add(mondayStr.slice(0, 7));
+      });
+    }
+
+    const [currY, currM] = currentMonth.split("-").map(Number);
+    for (let offset = -5; offset <= 3; offset++) {
+      const d = new Date(currY, currM - 1 + offset, 1, 12, 0, 0);
+      monthsSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+
+    return Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
+  }, [client]);
 
   const assignedPlan = useMemo(() => {
     if (!client?.planId) return null;
@@ -183,14 +394,12 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
 
   if (!isOpen || !client) return null;
 
-  const maxWeekly = assignedPlan ? assignedPlan.classesPerWeek : (client.planClassesPerWeek || 0);
-
-  const toggleWeekExpand = (mondayStr: string) => {
-    setExpandedWeeks((prev) => ({
-      ...prev,
-      [mondayStr]: !prev[mondayStr],
-    }));
-  };
+  const monthlyUsage = getClientMonthlyUsage(client.id, selectedMonth);
+  const activeCount = monthBookings.filter((b) => b.status !== "cancelled").length;
+  const effectiveUsed = Math.max(monthlyUsage.used, activeCount);
+  const effectiveRemaining = Math.max(0, monthlyUsage.total - effectiveUsed);
+  const isComplete = monthlyUsage.total > 0 && effectiveUsed === monthlyUsage.total;
+  const isExceeded = monthlyUsage.total > 0 && effectiveUsed > monthlyUsage.total;
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,7 +418,7 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
         customPrice: finalCustomPrice,
         billingFrequency,
       });
-      setActiveTab("weeks");
+      setActiveTab("month");
     } catch (err) {
       console.error(err);
     } finally {
@@ -269,27 +478,43 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
         </div>
 
         {/* Tab Navigation - Symmetric Segmented Control */}
-        <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl mt-3 sm:mt-4 shrink-0 text-xs font-bold">
+        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl mt-3 sm:mt-4 shrink-0 text-xs font-bold">
           <button
             type="button"
-            onClick={() => setActiveTab("weeks")}
-            className={`py-2 px-1.5 sm:px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all text-center ${
-              activeTab === "weeks"
+            onClick={() => setActiveTab("month")}
+            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
+              activeTab === "month"
                 ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             }`}
           >
             <CalendarDays className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">
-              <span className="sm:hidden">Semanas</span>
-              <span className="hidden sm:inline">Semana a Semana</span>
+              <span className="sm:hidden">Mes</span>
+              <span className="hidden sm:inline">Clases del Mes</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("fixed")}
+            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
+              activeTab === "fixed"
+                ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+            }`}
+          >
+            <Repeat className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">
+              <span className="sm:hidden">Fija</span>
+              <span className="hidden sm:inline">Reserva Fija</span>
             </span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("all")}
-            className={`py-2 px-1.5 sm:px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all text-center ${
+            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
               activeTab === "all"
                 ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
@@ -297,15 +522,15 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
           >
             <ListOrdered className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">
-              <span className="sm:hidden">Historial ({clientBookings.length})</span>
-              <span className="hidden sm:inline">Historial ({clientBookings.length})</span>
+              <span className="sm:hidden">Historial</span>
+              <span className="hidden sm:inline">Historial ({historyBookings.length > 0 ? historyBookings.length : 10})</span>
             </span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("settings")}
-            className={`py-2 px-1.5 sm:px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all text-center ${
+            className={`py-2 px-1 sm:px-2 rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all text-center ${
               activeTab === "settings"
                 ? "bg-white dark:bg-indigo-600 text-slate-900 dark:text-white shadow-xs font-black"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
@@ -321,191 +546,357 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
 
         {/* Tab Content Body */}
         <div className="flex-1 overflow-y-auto py-3 sm:py-4 space-y-3 pr-0.5 sm:pr-1 scrollbar-thin">
-          {/* TAB 1: SEMANAS Y PAGOS */}
-          {activeTab === "weeks" && (
+          {/* TAB 1: CLASES DEL MES */}
+          {activeTab === "month" && (
             <div className="space-y-3">
-              {bookingsByWeek.length === 0 ? (
-                <div className="py-12 sm:py-16 text-center text-slate-400 text-xs">
-                  <CalendarDays className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
-                  <p className="font-bold text-slate-700 dark:text-slate-300">Sin clases registradas</p>
-                  <p className="mt-0.5 text-slate-400">No hay registros de turnos para este alumno aún.</p>
-                </div>
-              ) : (
-                bookingsByWeek.map((week) => {
-                  const isExpanded = !!expandedWeeks[week.mondayStr];
-                  const hasPlan = !!client.planId;
-                  const isFullQuota = hasPlan && week.activeCount >= maxWeekly;
+              {/* Month Navigation Toolbar */}
+              <div className="flex items-center justify-between p-2 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                  title="Mes anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
 
-                  return (
-                    <div
-                      key={week.mondayStr}
-                      className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900/60 overflow-hidden shadow-2xs"
+                <div className="flex items-center gap-2 min-w-0">
+                  <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  
+                  {/* Quick Month Select */}
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="bg-transparent font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-hidden py-1 px-1.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors"
+                  >
+                    {availableMonths.map((m) => (
+                      <option key={m} value={m} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 font-bold">
+                        {formatMonthYearHeader(m)}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedMonth !== currentMonthStr && (
+                    <button
+                      type="button"
+                      onClick={handleCurrentMonth}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 cursor-pointer transition-colors shrink-0"
                     >
-                      {/* Week Card Header */}
-                      <div className="p-3 sm:p-4 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col gap-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div
-                            className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0"
-                            onClick={() => toggleWeekExpand(week.mondayStr)}
-                          >
-                            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">
-                              <Calendar className="w-4 h-4" />
-                            </div>
+                      Hoy
+                    </button>
+                  )}
+                </div>
 
-                            <div className="min-w-0">
-                              <div className="font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">
-                                Semana: {week.rangeLabel}
-                              </div>
-                              <div className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 font-medium">
-                                <span className={isFullQuota ? "text-rose-600 dark:text-rose-400 font-bold" : "text-indigo-600 dark:text-indigo-400 font-bold"}>
-                                  {week.activeCount} {hasPlan ? `de ${maxWeekly}` : ""} {week.activeCount === 1 ? "turno" : "turnos"}
-                                </span>
-                                <span>•</span>
-                                <span className="text-[10px] sm:text-[11px] text-slate-400">
-                                  {isExpanded ? "Ocultar" : "Ver clases"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                  title="Mes siguiente"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleWeekExpand(week.mondayStr)}
-                            className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 shrink-0"
-                          >
-                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </button>
-                        </div>
-
-                        {/* Payment Toggle Row */}
-                        <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between gap-2">
-                          <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                            Estado del abono:
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setWeekPaymentToConfirm({
-                                mondayStr: week.mondayStr,
-                                rangeLabel: week.rangeLabel,
-                                isPaid: week.isPaid,
-                              })
-                            }
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
-                              week.isPaid
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20"
-                                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20"
-                            }`}
-                            title="Haz clic para alternar el pago de esta semana"
-                          >
-                            {week.isPaid ? (
-                              <>
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>✓ Semana Pagada</span>
-                              </>
-                            ) : (
-                              <>
-                                <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                                <span>⏳ Pago Pendiente</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Expanded Shifts Detail of this week */}
-                      {isExpanded && (
-                        <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 space-y-2 bg-white dark:bg-slate-900">
-                          <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                            Clases de esta semana:
-                          </div>
-
-                          {week.bookings.map((b) => (
-                            <div
-                              key={b.id}
-                              className="p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-                            >
-                              <div className="space-y-1 min-w-0">
-                                <div className="font-black text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
-                                  <span>{b.shiftTitle}</span>
-                                  <DisciplineBadge discipline={b.discipline} size="sm" />
-                                </div>
-                                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-                                  <span>📅 {b.shiftDate}</span>
-                                  <span>⏰ {b.shiftTime} hs</span>
-                                  <span>👤 {b.instructorName}</span>
-                                </div>
-                              </div>
-
-                              <div className="self-end sm:self-center">
-                                {b.status === "cancelled" ? (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">
-                                    Cancelada
-                                  </span>
-                                ) : b.status === "attended" ? (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                                    Asistió
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
-                                    Confirmada
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+              {/* Monthly Overview Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
+                      <span>Consumo de {formatMonthYearHeader(selectedMonth)}</span>
+                      {assignedPlan && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          {assignedPlan.name}
+                        </span>
                       )}
                     </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: HISTORIAL COMPLETO */}
-          {activeTab === "all" && (
-            <div className="space-y-2">
-              {clientBookings.length === 0 ? (
-                <div className="py-12 sm:py-16 text-center text-slate-400 text-xs">
-                  Sin reservas registradas.
-                </div>
-              ) : (
-                clientBookings.map((b) => (
-                  <div
-                    key={b.id}
-                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-black text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
-                        <span>{b.shiftTitle}</span>
-                        <DisciplineBadge discipline={b.discipline} size="sm" />
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-500 mt-1">
-                        <span>📅 {b.shiftDate}</span>
-                        <span>⏰ {b.shiftTime} hs</span>
-                        <span>Prof. {b.instructorName}</span>
-                      </div>
-                    </div>
-
-                    <div className="self-end sm:self-center">
-                      {b.status === "cancelled" ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600">
-                          Cancelada
-                        </span>
-                      ) : b.status === "attended" ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
-                          Asistió
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {client.planId ? (
+                        <span>
+                          {effectiveUsed} de {monthlyUsage.total} clases del mes usadas
                         </span>
                       ) : (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600">
-                          Confirmada
+                        <span>
+                          {activeCount} {activeCount === 1 ? "clase registrada" : "clases registradas"} (Sin plan asignado)
                         </span>
                       )}
                     </div>
                   </div>
-                ))
+
+                  {client.planId && (
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span
+                        className={`px-2.5 py-1 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 ${
+                          isExceeded
+                            ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                            : isComplete
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                            : "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30"
+                        }`}
+                      >
+                        {isExceeded ? (
+                          <>
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Excedido ({effectiveUsed}/{monthlyUsage.total})</span>
+                          </>
+                        ) : isComplete ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Cupo Completo ({monthlyUsage.total})</span>
+                          </>
+                        ) : (
+                          <>
+                            <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>{effectiveRemaining} disp.</span>
+                          </>
+                        )}
+                      </span>
+
+                      {/* Botón WhatsApp de aviso de clases restantes */}
+                      {(() => {
+                        const phoneDigits = (client.phone || "").replace(/\D/g, "");
+                        if (!phoneDigits) return null;
+                        const fullPhone = phoneDigits.startsWith("54") ? phoneDigits : `549${phoneDigits}`;
+                        const studio = settings?.studioName || "Demo Pilates";
+                        const monthHeader = formatMonthYearHeader(selectedMonth);
+                        let message = "";
+                        if (effectiveRemaining === 1) {
+                          message = `¡Hola ${client.name}! Te escribimos de ${studio} para recordarte que te queda 1 clase disponible de tu plan de ${monthHeader}. ¡Te esperamos! ✨`;
+                        } else if (effectiveRemaining > 1) {
+                          message = `¡Hola ${client.name}! Te escribimos de ${studio} para recordarte que te quedan ${effectiveRemaining} clases disponibles de tu plan de ${monthHeader}. ¡Te esperamos! ✨`;
+                        } else if (isExceeded) {
+                          message = `¡Hola ${client.name}! Te escribimos de ${studio} para avisarte que ya utilizaste ${effectiveUsed} clases de las ${monthlyUsage.total} de tu plan de ${monthHeader}.`;
+                        } else {
+                          message = `¡Hola ${client.name}! Te escribimos de ${studio} para comentarte que ya completaste las ${monthlyUsage.total} clases de tu plan de ${monthHeader}. ¡Muchas gracias! ✨`;
+                        }
+                        return (
+                          <a
+                            href={`whatsapp://send?phone=${fullPhone}&text=${encodeURIComponent(message)}`}
+                            className="p-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-2xs hover:scale-105"
+                            title={`Avisar por WhatsApp: le quedan ${effectiveRemaining} clases en ${monthHeader}`}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </a>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Progress bar (if client has plan) */}
+                {client.planId && (
+                  <div className="space-y-1">
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          isExceeded
+                            ? "bg-rose-500"
+                            : isComplete
+                            ? "bg-emerald-500"
+                            : "bg-indigo-600"
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (effectiveUsed / (monthlyUsage.total || 1)) * 100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                      <span>0 clases</span>
+                      <span>{monthlyUsage.total} clases permitidas</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Monthly Classes Direct List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Clases de {formatMonthYearHeader(selectedMonth)} ({monthBookings.length}):
+                  </span>
+                  {loadingMonthBookings && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                  )}
+                </div>
+
+                {loadingMonthBookings && monthBookings.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                    <span>Cargando clases del mes...</span>
+                  </div>
+                ) : monthBookings.length === 0 ? (
+                  <div className="py-12 sm:py-16 text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                    <CalendarDays className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                    <p className="font-bold text-slate-700 dark:text-slate-300">
+                      Sin clases en {formatMonthYearHeader(selectedMonth)}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      La clienta no tiene turnos registrados en este mes.
+                    </p>
+                  </div>
+                ) : (
+                  monthBookings.map((b) => {
+                    const dateInfo = formatBookingDate(b.shiftDate);
+                    const isCancelled = b.status === "cancelled";
+
+                    return (
+                      <div
+                        key={b.id}
+                        className={`p-3 sm:p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                          isCancelled
+                            ? "bg-slate-50/50 dark:bg-slate-950/30 border-slate-200/60 dark:border-slate-800/60 opacity-60"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xs hover:border-indigo-200 dark:hover:border-indigo-800/60"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0">
+                          {/* Date badge */}
+                          <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border ${
+                            isCancelled
+                              ? "bg-slate-100 dark:bg-slate-800 border-slate-200 text-slate-400"
+                              : "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-300"
+                          }`}>
+                            <span className="text-[10px] font-bold uppercase leading-none">
+                              {dateInfo.dayName.slice(0, 3)}
+                            </span>
+                            <span className="text-sm font-black leading-tight">
+                              {dateInfo.dayNumber}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1 min-w-0">
+                            <div className="font-black text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
+                              <span className={isCancelled ? "line-through text-slate-400" : ""}>
+                                {b.shiftTitle}
+                              </span>
+                              <DisciplineBadge discipline={b.discipline} size="sm" />
+                            </div>
+
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-medium">
+                              <span>📅 {dateInfo.full}</span>
+                              <span>⏰ {b.shiftTime} hs</span>
+                              {b.instructorName && <span>👤 {b.instructorName}</span>}
+                              {b.room && <span>📍 {b.room}</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="self-end sm:self-center shrink-0">
+                          {isCancelled ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                              Cancelada
+                            </span>
+                          ) : b.status === "attended" ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              Asistió
+                            </span>
+                          ) : b.status === "no_show" ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30">
+                              ✕ Ausente
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
+                              Confirmada
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: RESERVA FIJA RECURRENTE */}
+          {activeTab === "fixed" && (
+            <ClientFixedBookingTab
+              client={client}
+              onSuccess={loadMonthlyBookings}
+            />
+          )}
+
+          {/* TAB 2: HISTORIAL (ÚLTIMAS 10) */}
+          {activeTab === "all" && (
+            <div className="space-y-2.5">
+              {loadingHistory && historyBookings.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                  <span>Cargando historial de reservas...</span>
+                </div>
+              ) : historyBookings.length === 0 ? (
+                <div className="py-12 sm:py-16 text-center text-slate-400 text-xs">
+                  Sin reservas registradas.
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between px-1 pb-1">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      Mostrando {historyBookings.length} {historyBookings.length === 1 ? "reserva reciente" : "reservas recientes"}
+                    </span>
+                    {loadingHistory && (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                    )}
+                  </div>
+
+                  {historyBookings.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-black text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
+                          <span>{b.shiftTitle}</span>
+                          <DisciplineBadge discipline={b.discipline} size="sm" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-500 mt-1">
+                          <span>📅 {b.shiftDate}</span>
+                          <span>⏰ {b.shiftTime} hs</span>
+                          <span>Prof. {b.instructorName}</span>
+                        </div>
+                      </div>
+
+                      <div className="self-end sm:self-center">
+                        {b.status === "cancelled" ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600">
+                            Cancelada
+                          </span>
+                        ) : b.status === "attended" ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
+                            Asistió
+                          </span>
+                        ) : b.status === "no_show" ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-600 dark:text-red-400">
+                            Ausente
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600">
+                            Confirmada
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {hasMoreHistory && (
+                    <button
+                      type="button"
+                      onClick={() => setHistoryLimit((prev) => prev + 10)}
+                      disabled={loadingHistory}
+                      className="w-full mt-2 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                    >
+                      {loadingHistory ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Cargando...</span>
+                        </>
+                      ) : (
+                        <span>+ Cargar 10 anteriores</span>
+                      )}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -698,25 +1089,6 @@ export function ClientHistoryModal({ isOpen, onClose, client }: ClientHistoryMod
           }
         }}
         onCancel={() => setShowDeleteConfirm(false)}
-      />
-
-      {/* Confirmation Modal for Individual Week Payment toggle */}
-      <ConfirmModal
-        isOpen={!!weekPaymentToConfirm}
-        title={weekPaymentToConfirm?.isPaid ? "Desmarcar Pago Semanal" : "Confirmar Pago Semanal"}
-        message={
-          weekPaymentToConfirm?.isPaid
-            ? `¿Deseas marcar la semana (${weekPaymentToConfirm?.rangeLabel}) de ${client.name} como PENDIENTE de pago?`
-            : `¿Deseas registrar el cobro y marcar la semana (${weekPaymentToConfirm?.rangeLabel}) de ${client.name} como PAGADA?`
-        }
-        confirmText={weekPaymentToConfirm?.isPaid ? "Sí, Marcar Pendiente" : "Sí, Marcar Pagada"}
-        onConfirm={async () => {
-          if (weekPaymentToConfirm) {
-            await toggleClientWeeklyPayment(client.id, weekPaymentToConfirm.mondayStr);
-            setWeekPaymentToConfirm(null);
-          }
-        }}
-        onCancel={() => setWeekPaymentToConfirm(null)}
       />
     </div>
   );

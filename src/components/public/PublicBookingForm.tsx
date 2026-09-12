@@ -372,7 +372,7 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
     return 0; // Particulares o sin datos NO ven la opción de agendar más clases
   }, [weeklyUsage]);
 
-  // Días laborables (Lunes a Viernes) de la semana del turno para el selector
+  // Días laborables (Lunes a Sábado) de la semana del turno para el selector
   const weekDays = useMemo(() => {
     const baseDate = new Date(shift.date + "T12:00:00");
     const monday = new Date(baseDate);
@@ -380,14 +380,17 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
     const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
     monday.setDate(diff);
 
-    const namesShort = ["Lun", "Mar", "Mié", "Jue", "Vie"];
-    const namesFull = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+    const namesShort = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+    const namesFull = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
     const list = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const dateStr = d.toISOString().split("T")[0];
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const dateStr = `${year}-${month}-${day}`;
       const count = otherAvailableWeekShifts.filter((s) => s.date === dateStr).length;
       list.push({
         dateStr,
@@ -449,7 +452,14 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
   const isMainShiftStarted = hasShiftStarted(shift.date, shift.startTime);
   const hasNameInfo = clientName.trim().length > 0;
   const isFormValid = hasNameInfo && hasContactInfo;
-  const requiresPlanSelection = !matchedClient?.planId && !matchedClient?.planName && !matchedClient?.planClassesPerWeek && availablePlans.length > 0;
+  const hasPlanAssigned = Boolean(
+    matchedClient && (
+      matchedClient.planId ||
+      matchedClient.planName ||
+      (matchedClient.planClassesPerWeek && matchedClient.planClassesPerWeek > 0)
+    )
+  );
+  const requiresPlanSelection = !hasPlanAssigned && availablePlans.length > 0;
   const isPlanSelected = !requiresPlanSelection || Boolean(selectedPlan);
   const isPlanQuotaExceeded = weeklyUsage.hasPlan && weeklyUsage.remaining === 0;
   const isSubmitDisabled = submitting || !isFormValid || !isPlanSelected || isPlanQuotaExceeded || isMainShiftAlreadyBooked || isMainShiftStarted;
@@ -643,7 +653,7 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
       </div>
 
       {/* Selector de Planes y Costos para Clientas Nuevas o Sin Plan Asignado */}
-      {!matchedClient?.planId && !matchedClient?.planName && !matchedClient?.planClassesPerWeek && hasNameInfo && hasContactInfo && availablePlans.length > 0 && (
+      {!hasPlanAssigned && hasNameInfo && hasContactInfo && availablePlans.length > 0 && (
         <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -705,7 +715,7 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
       )}
 
       {/* Plan Status Banner (Si la clienta ya tiene Plan asignado en base de datos) */}
-      {matchedClient && (matchedClient.planId || matchedClient.planName || matchedClient.planClassesPerWeek) && weeklyUsage.hasPlan && (
+      {hasPlanAssigned && weeklyUsage.hasPlan && (
         weeklyUsage.remaining === 0 ? (
           <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-950 dark:text-rose-200 text-xs space-y-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
@@ -773,8 +783,8 @@ export function PublicBookingForm({ shift, onSuccess, onCancel }: PublicBookingF
             Selecciona el día para ver los turnos disponibles y sumarlos a tu plan:
           </p>
 
-          {/* 5-Day Selector Grid */}
-          <div className="grid grid-cols-5 gap-1 sm:gap-1.5 w-full">
+          {/* 6-Day Selector Grid */}
+          <div className="grid grid-cols-6 gap-1 sm:gap-1.5 w-full">
             {weekDays.map((d) => {
               const isSelected = d.dateStr === selectedAddDay;
               const isMainShiftDay = d.dateStr === shift.date;

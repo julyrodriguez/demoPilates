@@ -45,7 +45,14 @@ export default function ReservasPage() {
     }
 
     if (!db) {
-      setFetchedBookings(fallbackBookings);
+      let filtered = fallbackBookings;
+      if (selectedDate) {
+        filtered = filtered.filter((b) => b.shiftDate === selectedDate);
+      }
+      if (selectedStatus !== "all") {
+        filtered = filtered.filter((b) => b.status === selectedStatus);
+      }
+      setFetchedBookings(filtered.slice(0, displayLimit));
       setIsLoading(false);
       return;
     }

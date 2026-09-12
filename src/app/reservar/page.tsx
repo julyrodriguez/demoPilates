@@ -22,6 +22,7 @@ function getInitialWeekday(): string {
 }
 
 export default function ReservarPublicPage() {
+  const { shifts: fallbackShifts, bookings: fallbackBookings } = useData();
   const [selectedDate, setSelectedDate] = useState(getInitialWeekday());
   const [dayShifts, setDayShifts] = useState<Shift[]>([]);
   const [dayBookings, setDayBookings] = useState<Booking[]>([]);
@@ -56,6 +57,10 @@ export default function ReservarPublicPage() {
 
     const db = getFirebaseDb();
     if (!db) {
+      const dayS = fallbackShifts.filter((s) => s.date === selectedDate);
+      const dayB = fallbackBookings.filter((b) => b.shiftDate === selectedDate && b.status !== "cancelled");
+      setDayShifts(dayS);
+      setDayBookings(dayB);
       setIsLoadingDay(false);
       return;
     }
@@ -127,7 +132,7 @@ export default function ReservarPublicPage() {
       isMounted = false;
       unsubscribes.forEach((unsub) => unsub());
     };
-  }, [selectedDate]);
+  }, [selectedDate, fallbackShifts, fallbackBookings]);
 
   // Live shifts computed with realtime synchronization for the selected day
   const liveShifts = useMemo(() => {

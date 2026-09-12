@@ -50,6 +50,7 @@ export interface Booking {
   createdAt: string;
   notes?: string;
   price: number;
+  searchKeywords?: string[];
 }
 
 export interface Instructor {
@@ -68,6 +69,7 @@ export interface Plan {
   id: string;
   name: string; // ej. "Plan 2x por semana"
   classesPerWeek: number; // 1, 2, 3, etc.
+  classesPerMonth?: number; // Clases totales por mes (opcional, por defecto classesPerWeek * 4)
   price: number;
   description?: string;
   active: boolean;
@@ -96,7 +98,23 @@ export interface Client {
   weeklyPayments?: Record<string, boolean>; // Estado de pago por semana (clave: fecha del lunes de la semana 'YYYY-MM-DD')
   weeklyUsageMap?: Record<string, number>; // Cantidad de turnos reservados por semana (clave: fecha del lunes 'YYYY-MM-DD')
   monthlyPayments?: Record<string, boolean>; // Estado de pago por mes (clave: 'YYYY-MM')
+  monthlyUsageMap?: Record<string, number>; // Cantidad de turnos reservados por mes (clave: 'YYYY-MM')
   paymentNotes?: string;
+  fixedSubscriptions?: FixedBookingSubscription[]; // Suscripciones a turnos fijos (días y horarios fijos semanales/mensuales)
+}
+
+export interface FixedBookingSubscription {
+  id: string;
+  dayOfWeek: number; // 0 = Domingo, 1 = Lunes, 2 = Martes, 3 = Miércoles, 4 = Jueves, 5 = Viernes, 6 = Sábado
+  dayName: string; // ej. "Martes"
+  time: string; // ej. "15:00"
+  monthKey: string; // ej. "2026-09"
+  dates: string[]; // Fechas agendadas ["2026-09-01", "2026-09-08", ...]
+  bookingIds?: string[];
+  createdAt: string;
+  active: boolean;
+  instructorName?: string;
+  discipline?: string;
 }
 
 export interface EmailLog {
@@ -137,4 +155,25 @@ export interface FeedbackComment {
   reply?: string;
   replyAuthor?: string;
   replyAt?: string;
+}
+
+export type NotificationType =
+  | 'booking_created'
+  | 'booking_cancelled'
+  | 'booking_status_changed'
+  | 'system';
+
+export interface NotificationItem {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  clientName?: string;
+  shiftTitle?: string;
+  shiftDate?: string;
+  shiftTime?: string;
+  bookingId?: string;
+  shiftId?: string;
+  read: boolean;
+  createdAt: string; // ISO string
 }

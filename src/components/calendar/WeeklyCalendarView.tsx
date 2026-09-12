@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Shift, Instructor, Booking } from "@/types";
 import { useData } from "@/context/DataContext";
 import { DisciplineBadge } from "@/components/common/DisciplineBadge";
+import { RecentBookingsTicker } from "./RecentBookingsTicker";
 import { getFirebaseDb } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import {
@@ -35,13 +36,19 @@ interface WeeklyCalendarViewProps {
   onDeleteShift: (id: string) => void;
   onBookClient: (shift: Shift) => void;
   onViewAttendees: (shift: Shift) => void;
+  onViewBookingDetail?: (booking: Booking) => void;
 }
 
 function getMonday(d: Date): Date {
   const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-  date.setDate(diff);
+  const day = date.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+  // Si estamos a domingo (0), avanzamos directamente al lunes de la semana siguiente
+  if (day === 0) {
+    date.setDate(date.getDate() + 1);
+  } else {
+    const diff = date.getDate() - day + 1;
+    date.setDate(diff);
+  }
   date.setHours(0, 0, 0, 0);
   return date;
 }
@@ -64,12 +71,13 @@ const DAY_NAMES = [
   { short: "Mié", full: "Miércoles" },
   { short: "Jue", full: "Jueves" },
   { short: "Vie", full: "Viernes" },
+  { short: "Sáb", full: "Sábado" },
 ];
 
 function getInitialDayKey(): string {
   const d = new Date();
   const day = d.getDay();
-  if (day === 0 || day === 6) {
+  if (day === 0) {
     return formatDateKey(getMonday(d));
   }
   return formatDateKey(d);
@@ -110,6 +118,7 @@ export function WeeklyCalendarView({
   onDeleteShift,
   onBookClient,
   onViewAttendees,
+  onViewBookingDetail,
 }: WeeklyCalendarViewProps) {
   const { disciplines, bookings: propBookings } = useData();
   const [currentMonday, setCurrentMonday] = useState<Date>(() => getMonday(new Date()));
@@ -131,9 +140,9 @@ export function WeeklyCalendarView({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const todayStr = useMemo(() => formatDateKey(new Date()), []);
 
-  // 5 días de la semana laboral (Lunes a Viernes)
+  // 6 días de la semana laboral (Lunes a Sábado)
   const weekDays = useMemo(() => {
-    return Array.from({ length: 5 }, (_, i) => {
+    return Array.from({ length: 6 }, (_, i) => {
       const date = new Date(currentMonday);
       date.setDate(currentMonday.getDate() + i);
       const dateKey = formatDateKey(date);
@@ -174,10 +183,12 @@ export function WeeklyCalendarView({
     let isMounted = true;
     const db = getFirebaseDb();
 
+    const lastWeekDayStr = weekDays[weekDays.length - 1]?.dateKey;
+
     const currentKey =
       viewMode === "daily_agenda"
         ? `day_${selectedDayKey}`
-        : `week_${weekDays[0]?.dateKey}_${weekDays[4]?.dateKey}`;
+        : `week_${weekDays[0]?.dateKey}_${lastWeekDayStr}`;
 
     if (dataCache.current[currentKey]) {
       setFetchedShifts(dataCache.current[currentKey].shifts);
@@ -249,15 +260,15 @@ export function WeeklyCalendarView({
         );
         unsubscribes.push(unsubBookings);
       } else {
-        // 2. Consulta de la SEMANA completa en Tablero
+        // 2. Consulta de la SEMANA completa en Tablero (Lunes a Sábado)
         const mondayStr = weekDays[0]?.dateKey;
-        const fridayStr = weekDays[4]?.dateKey;
+        const saturdayStr = weekDays[weekDays.length - 1]?.dateKey;
 
-        if (mondayStr && fridayStr) {
+        if (mondayStr && saturdayStr) {
           const shiftsQuery = query(
             collection(db, "pilates_shifts"),
             where("date", ">=", mondayStr),
-            where("date", "<=", fridayStr)
+            where("date", "<=", saturdayStr)
           );
           const unsubShifts = onSnapshot(
             shiftsQuery,
@@ -285,7 +296,7 @@ export function WeeklyCalendarView({
           const bookingsQuery = query(
             collection(db, "pilates_bookings"),
             where("shiftDate", ">=", mondayStr),
-            where("shiftDate", "<=", fridayStr)
+            where("shiftDate", "<=", saturdayStr)
           );
           const unsubBookings = onSnapshot(
             bookingsQuery,
@@ -931,14 +942,21 @@ export function WeeklyCalendarView({
               {Array.from({ length: shift.capacity }).map((_, slotIdx) => {
                 const attendee = shiftAttendees[slotIdx];
                 const isOccupied = slotIdx < shift.bookedCount;
+                const isAbsent = attendee?.status === "no_show";
 
                 return (
                   <div
                     key={slotIdx}
-                    title={attendee ? `Ocupado por: ${attendee.clientName}` : `Cama ${slotIdx + 1} libre`}
+                    title={
+                      attendee
+                        ? `Ocupado por: ${attendee.clientName}${isAbsent ? " (Ausente)" : ""}`
+                        : `Cama ${slotIdx + 1} libre`
+                    }
                     className={`h-7 rounded-xl text-[10px] font-bold flex items-center justify-center transition-all ${
                       isOccupied
-                        ? isPast
+                        ? isAbsent
+                          ? "bg-red-500 dark:bg-red-600 text-white shadow-2xs ring-1 ring-red-400/40"
+                          : isPast
                           ? "bg-slate-400 dark:bg-slate-600 text-white"
                           : "bg-indigo-600 text-white shadow-2xs"
                         : "bg-slate-200/70 dark:bg-slate-800/80 text-slate-400 border border-dashed border-slate-300 dark:border-slate-700"
@@ -955,7 +973,16 @@ export function WeeklyCalendarView({
               <div className="pt-2 border-t border-slate-200/50 dark:border-slate-800/50 text-[11px] text-slate-500">
                 <span className="font-bold text-slate-600 dark:text-slate-400 mr-1.5">Inscriptos:</span>
                 <span className="text-slate-700 dark:text-slate-300 font-medium">
-                  {shiftAttendees.map((a) => a.clientName).join(", ")}
+                  {shiftAttendees.map((a, idx) => (
+                    <span
+                      key={a.id || idx}
+                      className={a.status === "no_show" ? "text-red-600 dark:text-red-400 font-bold" : ""}
+                    >
+                      {a.clientName}
+                      {a.status === "no_show" ? " (Ausente)" : ""}
+                      {idx < shiftAttendees.length - 1 ? ", " : ""}
+                    </span>
+                  ))}
                 </span>
               </div>
             )}
@@ -993,7 +1020,10 @@ export function WeeklyCalendarView({
   };
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-3 sm:space-y-4">
+      {/* Mini Card Alargada: Ticker en vivo de las últimas 3 reservas (Estilo Broker) */}
+      <RecentBookingsTicker onViewBooking={onViewBookingDetail} />
+
       {/* Top Header Controls (Full Width) */}
       <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
         {/* Main Row: Week Navigation + View Mode + Desktop Filters + New Class */}
@@ -1136,10 +1166,10 @@ export function WeeklyCalendarView({
           </div>
         </div>
 
-        {/* 5-Days Selector (SOLO EN AGENDA DIARIA - SIN CONTADOR DE CLASES) */}
+        {/* 6-Days Selector (SOLO EN AGENDA DIARIA - SIN CONTADOR DE CLASES) */}
         {viewMode === "daily_agenda" && (
           <div className="pt-3 border-t border-slate-200/80 dark:border-slate-800/80">
-            <div className="flex sm:grid sm:grid-cols-5 gap-1.5 sm:gap-2.5 w-full overflow-x-auto pb-1 sm:pb-0 scrollbar-none snap-x">
+            <div className="flex sm:grid sm:grid-cols-6 gap-1.5 sm:gap-2.5 w-full overflow-x-auto pb-1 sm:pb-0 scrollbar-none snap-x">
               {weekDays.map((d) => {
                 const isSelected = d.dateKey === selectedDayKey;
 

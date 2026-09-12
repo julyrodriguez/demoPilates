@@ -48,17 +48,8 @@ export const getFirebaseAuth = (): Auth | null => {
 };
 
 export const getFirebaseDb = (): Firestore | null => {
-  if (cachedDb) return cachedDb;
-  try {
-    const app = getFirebaseApp();
-    if (app) {
-      cachedDb = getFirestore(app);
-    }
-    return cachedDb;
-  } catch (error) {
-    console.warn("Firestore initialization warning:", error);
-    return null;
-  }
+  // Demo Mode: Base de datos desacoplada. Toda la persistencia es localcache (localStorage).
+  return null;
 };
 
 export const googleProvider = new GoogleAuthProvider();
