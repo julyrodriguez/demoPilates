@@ -185,6 +185,19 @@ export default function PaginaInformativa() {
                 Consulta el historial exacto de cada email emitido a los alumnos, previsualiza el diseño renderizado y prueba los enlaces de cancelación con un clic.
               </p>
             </div>
+
+            {/* 10. Generador de Imagen para Instagram */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-400 flex items-center justify-center shadow-2xs">
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
+                10. Generador de Imagen para Instagram
+              </h3>
+              <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Exportación directa de cronogramas semanales en 4K con tema Lavender Aura, formatos stories/feed y personalización completa de colores y tipografía.
+              </p>
+            </div>
           </div>
         </section>
 
